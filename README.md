@@ -80,3 +80,12 @@ To use this project, follow these steps:
 4.  **Prediction:** Use the scripts in the `predictors` module to make predictions.
 5.  **Evaluation:** Evaluate the predictions using the appropriate evaluation scripts.
 
+# TODO:
+- Instructions & run BLAST
+- Allow the use of GAF file for predictors (in addition to annotated sparse matrix)
+- Sparse matrix is currently stored as 3 separate aspects for smaller files
+- Add feature to rerun any step of choice
+- Add evaluator as a subpackage
+- Add installation instructions (via pip or via conda environment)
+- Add example data
+- Use logging module

@@ -14,9 +14,9 @@ go_codes:
     ELECTRONIC: ["IEA"]
     
 raw_file_paths:
-    uniprot_goa: "../data/raw/goa_human.gaf.220.gz"
-    uniprot_sprot: "../data/raw/uniprot_sprot.fasta.gz"
-    obo: "../data/raw/go-basic.obo"
+    uniprot_goa: "data/raw/goa_human.gaf.220.gz"
+    uniprot_sprot: "data/raw/uniprot_sprot.fasta.gz"
+    obo: "data/raw/go-basic.obo"
     
 processed_paths:
     train_terms: "../data/processed/train_terms.tsv"

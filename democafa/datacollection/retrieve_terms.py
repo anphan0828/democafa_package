@@ -174,7 +174,6 @@ def process_go_from_dat(file_path, go_codes, selected):
     df = df.drop_duplicates()
     return df
 
-# TODO: combine train_terms.tsv and train_taxonomy.tsv (maybe not for blast reasons)
 def replace_alternate_GO_terms(df, ontology_graph):
     """
     Replace alternate GO terms with their main GO terms using vectorized operations.
