@@ -1,0 +1,33 @@
+versions:
+    UniProt_version: "2023_05"
+    UniProt_sprot_file: "https://ftp.ebi.ac.uk/pub/databases/uniprot/previous_releases/release-2023_05/knowledgebase/uniprot_sprot-only2023_05.tar.gz"
+    UniProt_GOA_version: "2023-12-08"
+    UniProt_GOA_file: "https://ftp.ebi.ac.uk/pub/databases/GO/goa/old/HUMAN/goa_human.gaf.220.gz"
+    OBO: "https://release.geneontology.org/2023-11-15/ontology/go-basic.obo"
+    
+go_codes:
+    EXPERIMENTAL: ["EXP", "IDA", "IPI", "IMP", "IGI", "IEP", "HTP", "HDA", "HMP", "HGI", "HEP"]
+    COMPUTATIONAL: ["ISS", "ISO", "ISA", "ISM", "IGC", "RCA"]
+    PHYLOGENETICAL: ["IBA", "IBD", "IKR", "IRD"]
+    AUTHORSTATEMENT: ["TAS", "NAS"]
+    CURATORSTATMENT: ["IC", "ND"]
+    ELECTRONIC: ["IEA"]
+    
+raw_file_paths:
+    uniprot_goa: "../data/raw/goa_human.gaf.220.gz"
+    uniprot_sprot: "../data/raw/uniprot_sprot.fasta.gz"
+    obo: "../data/raw/go-basic.obo"
+    
+processed_paths:
+    train_terms: "../data/processed/train_terms.tsv"
+    train_sequences: "../data/processed/train_sequences.fasta"
+    
+    
+# VERSIONS = {
+#     "UniProt_version": "2023_05",
+#     "UniProt_sprot_file": " https://ftp.ebi.ac.uk/pub/databases/uniprot/previous_releases/release-2023_05/knowledgebase/uniprot_sprot-only2023_05.tar.gz",
+#     "UniProt_GOA_version": "2023-12-08",
+#     "UniProt_GOA_file":"https://ftp.ebi.ac.uk/pub/databases/GO/goa/old/HUMAN/goa_human.gaf.220.gz",
+#     "OBO": "https://release.geneontology.org/2023-11-15/ontology/go-basic.obo"
+    
+# }
