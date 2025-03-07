@@ -4,34 +4,6 @@
 
 This project is a CAFA (Critical Assessment of protein Function Annotation) implementation focusing on protein function prediction. It represents a conversion from a script-based approach to a proper Python package structure, offering improved modularity, reusability, and maintainability.
 
-## Project Structure
-### Directory Breakdown
-
-*   **democafa:** Contains the main source code for the democafa package.
-    *   **\_\_init\_\_.py:** Initializes the democafa package, including version information and top-level imports.
-    *   **config.py:** Provides configuration settings and parameters for the package.
-    *   **configuration.py:** Handles the loading and management of configuration values.
-    *   **main.py:** Contains the main entry point for the application.
-    *   **data:** Contains modules for data retrieval and preparation.
-        *   **\_\_init\_\_.py:** Initializes the data module.
-        *   **create\_test\_set.py:** Creates the combined test set.
-        *   **retrieve\_sequences.py:** Collects sequence data.
-        *   **retrieve\_terms.py:** Retrieves GO terms.
-        *   **processed:** Stores generated and intermediate data files.
-        *   **raw:** Stores original input data files.
-        *   **release:** Stores data release files.
-    *   **predictors:** Contains modules implementing prediction algorithms.
-        *   **\_\_init\_\_.py:** Initializes the predictors module.
-        *   **blast.py:** Implements a BLAST-based prediction algorithm.
-        *   **naive.py:** Implements a naive prediction algorithm.
-    *   **utils:** Contains utility modules.
-        *   **\_\_init\_\_.py:** Initializes the utilities module.
-        *   **dask\_write.py:** Provides utilities for working with Dask for efficient data writing operations.
-        *   **ontology.py:** Provides shared ontology processing functions.
-    *   **tests:** Contains test files mirroring the package structure.
-*   **build:** Contains build artifacts.
-
-
 ## Key Features
 
 *   **Efficient Matrix Handling:** Utilizes efficient storage and reuse of large sparse matrices to prevent redundant matrix creation, save computation time, and reduce memory usage.
@@ -39,19 +11,46 @@ This project is a CAFA (Critical Assessment of protein Function Annotation) impl
 *   **Configuration Management:** Centralized configuration in Python modules provides type-safe configuration that is easy to import, use, and version control.
 
 ## Project Structure
+### Directory Breakdown
+
+*   **democafa:** Contains the main source code for the democafa package.
+    *   **\_\_init\_\_.py:** Initializes the democafa package, including version information and top-level imports.
+    *   **config.py:** Provides configuration settings and parameters for the package.
+    *   **config.yaml:** Contains data sources and versions.
+    *   **main.py:** Contains the main entry point for the application.
+    *   **datacollection:** Contains modules for data retrieval and preparation.
+        *   **\_\_init\_\_.py:** Initializes the data module.
+        *   **create\_test\_set.py:** Creates the combined test set.
+        *   **retrieve\_sequences.py:** Collects sequence data.
+        *   **retrieve\_terms.py:** Retrieves GO terms.
+    *   **predictors:** Contains modules implementing prediction algorithms.
+        *   **\_\_init\_\_.py:** Initializes the predictors module.
+        *   **blast.py:** Implements a BLAST-based prediction algorithm.
+        *   **goa_nonexp.py:** Implements a non-experimental GO annotations baseline prediction.
+        *   **naive.py:** Implements a naive prediction algorithm.
+    *   **utils:** Contains utility modules.
+        *   **\_\_init\_\_.py:** Initializes the utilities module.
+        *   **dask\_write.py:** Provides utilities for working with Dask for efficient data writing operations.
+        *   **ontology.py:** Provides shared ontology processing functions.
+*   **data:** Contains raw and processed data.        
+*   **tests:** Contains test files mirroring the package structure.
+*   **build:** Contains build artifacts.
+
+### Package Structure
 
 ```
 democafa_package/
+    data/
+        raw/
+        processed/
+        release/
     democafa/
         __init__.py
         config.py
         config.yaml
         main.py
-        data/
+        datacollection/
             __init__.py
-            raw/
-            processed/
-            release/
             retrieve_terms.py
             retrieve_sequences.py
             create_test_set.py
@@ -59,22 +58,17 @@ democafa_package/
             __init__.py
             naive.py
             blast.py
+            goa_nonexp.py
         utils/
             __init__.py
             ontology.py
             dask_write.py
-            tests/
-        build/
+    tests/
+    build/
     pyproject.toml
     setup.py
     README.md
 ```
-
-### Files
-
-*   **pyproject.toml:** Contains project metadata and build configuration.
-*   **setup.py:** Package installation script.
-*   **README.md:** Project documentation (this file).
 
 ## Usage
 
