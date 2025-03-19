@@ -6,8 +6,10 @@ import obonet
 import numpy as np
 import pandas as pd
 import networkx as nx
+import pickle as cp
+import time
 from collections import Counter
-from scipy.sparse import dok_matrix, save_npz
+from scipy.sparse import dok_matrix, save_npz, csr_matrix, vstack
 
 
 def clean_ontology_edges(ontology):
@@ -77,30 +79,35 @@ def term_counts(terms_df, term_indices):
     :param term_indices:
     """
     
-    # num_proteins = len(terms_df.groupby('EntryID'))
-    # S = dok_matrix((num_proteins+1, len(term_indices)), dtype=np.int32)
-    # S[-1,:] = 1  # dummy protein
-    
-    # for i, (protein, protdf) in enumerate(terms_df.groupby('EntryID')):
-    #     row_count = {term_indices[t]:c for t,c in Counter(protdf['term']).items()}
-    #     for col, count in row_count.items():
-    #         S[i, col] = count
-    
-    # return S
-    # TODO: this term_counts is currently dealing with all aspects at once
-    proteins_idx = {p:i for i,p in enumerate(terms_df['EntryID'].unique())}
-    term_indices = {t:i for i,t in enumerate(terms_df['term'].unique())}
-    S = dok_matrix((len(proteins_idx)+1, len(term_indices)), dtype=np.int32)
+    num_proteins = len(terms_df.groupby('EntryID'))
+    S = dok_matrix((num_proteins+1, len(term_indices)), dtype=np.int32)
     S[-1,:] = 1  # dummy protein
     
-    for protein, i in proteins_idx.items():
-        protdf = terms_df.groupby('EntryID').get_group(protein)
+    for i, (protein, protdf) in enumerate(terms_df.groupby('EntryID')):
         row_count = {term_indices[t]:c for t,c in Counter(protdf['term']).items()}
         for col, count in row_count.items():
             S[i, col] = count
     
+    # return S
+    
+    # this term_counts is currently dealing with all aspects at once
+    # proteins_idx = {p:i for i,p in enumerate(terms_df['EntryID'].unique())}
+    # term_indices = {t:i for i,t in enumerate(terms_df['term'].unique())}
+    # protein_idx = {p:i for i,p in enumerate(sorted(terms_df['EntryID'].unique()))}
+    # num_proteins = len(terms_df.groupby('EntryID'))
+    # S = dok_matrix((len(num_proteins)+1, len(term_indices)), dtype=np.int32)
+    # S[-1,:] = 1  # dummy protein
+    
+    # for protein, i in protein_idx.items():
+    #     protdf = terms_df.groupby('EntryID').get_group(protein)
+    #     protein_terms = [t for t in protdf['term'].values if t in term_indices]
+    #     row_count = {term_indices[t]:c for t,c in Counter(protein_terms).items()}
+    #     for col, count in row_count.items():
+    #         S[i, col] = count
+    
     S = S.astype(bool)
-    return S, proteins_idx, term_indices
+    return S
+
 
 def calc_ia(term, count_matrix, ontology, terms_index):
     
@@ -108,18 +115,96 @@ def calc_ia(term, count_matrix, ontology, terms_index):
     
     # count of proteins with term
     prots_with_term = count_matrix[:,terms_index[term]].sum()
-    
     # count of proteins with all parents
     num_parents = len(parents)
     prots_with_parents = (count_matrix[:,[terms_index[p] for p in parents]].sum(1)==num_parents).sum()
-    
     # avoid floating point errors by returning exactly zero
     if prots_with_term == prots_with_parents:
         return 0
     
     return -np.log2(prots_with_term/prots_with_parents)
 
-def propagate_and_ia(terms_file, graph, matrix_propagated, output_tsv):
+
+def approach1_pivot_table(annotation_df):
+    """First approach using pandas pivot_table"""
+    start_time = time.time()
+    
+    matrix = pd.pivot_table(
+        annotation_df,
+        values='aspect',
+        index='EntryID',
+        columns='term',
+        aggfunc='count',
+        fill_value=0
+    )
+    protein_idx = {p:i for i,p in enumerate(matrix.index)}
+    term_idx = {t: i for i,t in enumerate(matrix.columns)}
+    matrix = matrix.astype(bool)
+    matrix = dok_matrix(matrix.values)
+    
+    # # Add dummy protein
+    # dummy_row = dok_matrix((1, matrix.shape[1]), dtype=bool)
+    # dummy_row[0,:] = True
+    # matrix = vstack([dummy_row, matrix])
+    # matrix = matrix.todok()
+    end_time = time.time()
+    return matrix, protein_idx, term_idx, end_time - start_time
+
+
+def approach2_term_counts(annotation_df):
+    """Second approach using Counter and manual matrix construction"""
+    start_time = time.time()
+    
+    term_indices = {t: i for i, t in enumerate(annotation_df['term'].unique())}
+    num_proteins = len(annotation_df.groupby('EntryID'))
+    # S = dok_matrix((num_proteins+1, len(term_indices)), dtype=np.int32)
+    # S[-1,:] = 1  # dummy protein
+    S = dok_matrix((num_proteins, len(term_indices)), dtype=np.int32)
+    
+    proteins = []
+    for i, (protein, protdf) in enumerate(annotation_df.groupby('EntryID')):
+        proteins.append(protein)
+        row_count = {term_indices[t]:c for t,c in Counter(protdf['term']).items()}
+        for col, count in row_count.items():
+            S[i, col] = count
+    
+    protein_idx = {p:i for i,p in enumerate(proteins)}
+    S = S.astype(bool)
+    end_time = time.time()
+    return S, protein_idx, term_indices, end_time - start_time
+
+
+def approach3_optimized(annotation_df):
+    """Optimized approach using scipy's sparse matrix construction"""
+    start_time = time.time()
+    
+    proteins = sorted(annotation_df['EntryID'].unique())
+    terms = sorted(annotation_df['term'].unique())
+    
+    protein_idx = {p: i for i, p in enumerate(proteins)}
+    term_indices = {t: i for i, t in enumerate(terms)}
+    
+    # Get rows and columns for sparse matrix
+    rows = [protein_idx[p] for p in annotation_df['EntryID']]
+    cols = [term_indices[t] for t in annotation_df['term']]
+    
+    # Create sparse matrix directly, from coordinates store in rows and cols
+    data = np.ones(len(rows), dtype=bool)
+    S = csr_matrix((data, (rows, cols)), 
+                  shape=(len(protein_idx), len(term_indices)))
+    
+    # Convert to dok for comparison
+    S_dok = S.todok()
+    # dummy_row = dok_matrix((1, S.shape[1]), dtype=bool)
+    # dummy_row[0,:] = True
+    # S_dok = vstack([dummy_row, S_dok])
+    # S_dok = S_dok.todok()
+    
+    end_time = time.time()
+    return S_dok, protein_idx, term_indices, end_time - start_time
+
+    
+def propagate_and_ia(terms_file, graph, matrix_propagated, matrix_indices, output_tsv):
     # load ontology graph and get three subontologies
     ontology_graph = clean_ontology_edges(obonet.read_obo(graph))
     roots = {'P': 'GO:0008150', 'C': 'GO:0005575', 'F': 'GO:0003674'}
@@ -129,32 +214,61 @@ def propagate_and_ia(terms_file, graph, matrix_propagated, output_tsv):
     annotation_df = pd.read_csv(terms_file, sep='\t')
     print('Propagating Terms')
     annotation_df = propagate_terms(annotation_df, subontologies)
+
+    ## Approach 1: Use pd.pivot_table (20sec for 900k annotations)
+    # matrix1, pidx1, tidx1, time1 = approach1_pivot_table(annotation_df)
     
-    # Count term instances
-    print('Counting Terms')
+    ## Approach 2: use Counter in term_counts function (7sec for 900k annotations)       
+    # matrix2, pidx2, tidx2, time2 = approach2_term_counts(annotation_df)
+    
+    ## Approach 3: create csr directly from coordinates
+    matrix3, pidx3, tidx3, time3 = approach3_optimized(annotation_df)
+    
+    if matrix_propagated and matrix_indices:
+        print(f'Saving to file {matrix_propagated}')
+        save_npz(matrix_propagated.tocsr(), matrix3)
+        with open(matrix_indices, 'wb') as f:
+            cp.dump((pidx3, tidx3), f)    
+                    
+    # # Count term instances with respect to aspect for IA calculation
+    # print('Counting Terms')
     aspect_counts = dict()
     aspect_terms = dict()
     term_idx = dict()
+    # for aspect, subont in subontologies.items():
+    #     aspect_terms[aspect] = sorted(subont.nodes)  # ensure same order
+    #     term_idx[aspect] = {t:i for i,t in enumerate(aspect_terms[aspect])}
+    #     # aspect_counts[aspect] = term_counts(annotation_df[annotation_df.aspect==aspect], term_idx[aspect])
+    #     matrix = term_counts(annotation_df[annotation_df.aspect==aspect], term_idx[aspect])
+
+    #     assert matrix.sum() == len(annotation_df[annotation_df.aspect==aspect]) + len(aspect_terms[aspect])
+    #     aspect_counts[aspect] = matrix
+        
+    # Compute IA
+    dummy_row = dok_matrix((1, matrix3.shape[1]), dtype=bool)
+    dummy_row[0,:] = True
+    matrix3 = vstack([dummy_row, matrix3])
+    matrix3 = matrix3.todok()
     for aspect, subont in subontologies.items():
         aspect_terms[aspect] = sorted(subont.nodes)  # ensure same order
-        term_idx[aspect] = {t:i for i,t in enumerate(aspect_terms[aspect])}
-        aspect_counts[aspect] = term_counts(annotation_df[annotation_df.aspect==aspect], term_idx[aspect])
-
-        assert aspect_counts[aspect].sum() == len(annotation_df[annotation_df.aspect==aspect]) + len(aspect_terms[aspect])
-    
+        # term_idx[aspect] = {t:i for i,t in enumerate(aspect_terms[aspect])}
+        terms = set.intersection(set(aspect_terms[aspect]), set(tidx3.keys()))
+        term_idx[aspect] = {t:i for i,t in enumerate(terms)}
+        matrix = matrix3[:,[tidx3[t] for t in term_idx[aspect]]]
+        # remove rows with all zeros (proteins that are not annotated in this aspect)
+        matrix = matrix[matrix.sum(1).A.flatten()>0,:]
+        assert matrix.sum() == len(annotation_df[annotation_df.aspect==aspect]) + len(terms)
+        aspect_counts[aspect] = matrix
+        
     # since we are indexing by column to compute IA, 
     # let's convert to Compressed Sparse Column format
     sp_matrix = {aspect:dok.tocsc() for aspect, dok in aspect_counts.items()}
-    if matrix_propagated:
-        for aspect, csr in sp_matrix.items():
-            save_npz(matrix_propagated.replace('.npz',f'_{aspect}.npz'), csr)
-            
-    # Compute IA
+    # TODO: new ia calculation is wrong, the roots have ia > 0 because proteins have to be within aspect
     if output_tsv:
         print('Computing Information Accretion')
         aspect_ia = {aspect: {t:0 for t in aspect_terms[aspect]} for aspect in aspect_terms.keys()}
         for aspect, subontology in subontologies.items():
-            for term in aspect_ia[aspect].keys():
+            for term in term_idx[aspect].keys():
                 aspect_ia[aspect][term] = calc_ia(term, sp_matrix[aspect], subontology, term_idx[aspect])
         
         ia_df = pd.concat([pd.DataFrame.from_dict(
@@ -169,6 +283,7 @@ def propagate_and_ia(terms_file, graph, matrix_propagated, output_tsv):
         print(f'Saving to file {output_tsv}')
         ia_df[['term','ia']].to_csv(output_tsv, header=None, sep='\t', index=False)
 
+
 def parse_args():
     parser = argparse.ArgumentParser(description='Propagate and Compute Information Accretion of GO annotations')
     parser.add_argument('--terms', '-a', required=True, 
@@ -180,10 +295,14 @@ def parse_args():
     parser.add_argument('--matrix_propagated', '-mp', default=None, 
                         help='Path to save propagated term counts')
     
+    parser.add_argument('--matrix_indices', '-mi', default=None,
+                        help='Path to save protein and term indices')
+    
     parser.add_argument('--output_tsv', '-ot', default=None, 
                         help='Path to save computed IA for each term in the GO. If empty, will be saved to ./IA.txt')  
     
     return parser.parse_args()
+
     
 def main():    
     args = parse_args(sys.argv[1:])
@@ -191,8 +310,10 @@ def main():
         terms_file = args.terms,
         graph = args.graph,
         matrix_propagated = args.matrix_propagated,
+        matrix_indices = args.matrix_indices,
         output_tsv = args.output_tsv
     )
+
         
 if __name__ == "__main__":
     main()  

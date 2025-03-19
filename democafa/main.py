@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 import os
-from democafa.config import VERSIONS, GO_CODES, RAW_FILE_PATHS, PROCESSED_PATHS
+from config import VERSIONS, GO_CODES, RAW_FILE_PATHS, PROCESSED_PATHS
 from datacollection.retrieve_terms import wrapper_retrieve_terms
 from datacollection.retrieve_sequences import process_uniprot_fasta
 from datacollection.create_test_set import create_test_set
@@ -11,12 +11,13 @@ from predictors.blast import blast_predict
 from predictors.naive import naive_predict
 from predictors.goa_nonexp import goa_nonexp_predict
 
+
 def main():
     # 0. Load configuration
     config_go_codes = GO_CODES
     
     # 1. Collecting data for release
-    if not os.path.exists('data/processed/train_terms.tsv'):
+    if not os.path.exists(PROCESSED_PATHS['train_terms']):
         wrapper_retrieve_terms(
             annot_file=RAW_FILE_PATHS['uniprot_goa'],
             filetype='goa',
@@ -28,7 +29,7 @@ def main():
     else:
         print("train_terms.tsv already exists, moving to sequences retrieval")
     
-    if not os.path.exists('data/processed/train_sequences.fasta'): 
+    if not os.path.exists(PROCESSED_PATHS['train_sequences']): 
         process_uniprot_fasta(
             input_fasta = RAW_FILE_PATHS['uniprot_sprot'],
             input_terms = PROCESSED_PATHS['train_terms'], # has to match output_tsv from wrapper_retrieve_terms
@@ -39,23 +40,24 @@ def main():
     else:
         print("train_sequences.fasta already exists, moving to test set creation")
     
-    if not os.path.exists('data/processed/test_superset.fasta'):
+    if not os.path.exists('data/processed/test_superset_all.fasta'):
         create_test_set(
             terms_file=PROCESSED_PATHS['train_terms'],
             sequences_gzfile=RAW_FILE_PATHS['uniprot_sprot'], # full SwissProt fasta file 
-            out_fasta='data/processed/test_superset.fasta',
+            out_fasta='data/processed/test_superset_all.fasta',
             uniprot_api_version=VERSIONS["UniProt_version"],
             out_taxonomy='data/processed/testsuperset-taxon-list.tsv',
-            include_all=True
+            include_all=True # include all proteins in test superset (not just proteins with missing aspects)
         )
     else:    
-        print("test_superset.fasta already exists, all data collected")
+        print("test_superset_all.fasta already exists, all data collected")
         
     propagate_and_ia(
         terms_file=PROCESSED_PATHS['train_terms'],
         graph=RAW_FILE_PATHS['obo'],
-        matrix_propagated='data/processed/train_terms_propagated.npz', 
-        output_tsv='data/processed/ia.tsv' # change to None if don't need IA calculation
+        matrix_propagated=PROCESSED_PATHS['train_matrix'],
+        matrix_indices=PROCESSED_PATHS['matrix_indices'], 
+        output_tsv=None # change to None if don't need IA calculation
     )
     
     # Use os module to copy files from processed to release folder
@@ -67,9 +69,24 @@ def main():
     goa_nonexp_predict(
         annot_file=RAW_FILE_PATHS['uniprot_goa'],
         selected_go='Computational,Phylogenetical,Electronic,ND,NAS',
-        query_ids='data/release/test_superset.fasta',
-        output_baseline='predictors/goa_nonexp_baseline.tsv'
+        query_file='data/release/test_superset.fasta',
+        output_baseline='data/processed/goa_nonexp_baseline.tsv'
     )
     
+    naive_predict(
+        annotations='data/processed/train_terms_propagated.npz',
+        query_file='data/release/test_superset.fasta',
+        indices='data/release/train_terms_indices.pkl',
+    )
+    
+    blast_predict(
+        annotations='data/processed/train_terms_propagated.npz',
+        query_file='data/release/test_superset.fasta',
+        indices='data/release/train_terms_indices.pkl',
+        blast_results='data/release/blast_results.tsv',
+        output_baseline='data/processed/blast_baseline.tsv',
+        keep_self_hits=False,
+        use_rscore=False
+    )
 if __name__ == "__main__":
     main()

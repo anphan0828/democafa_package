@@ -197,9 +197,9 @@ def create_test_set(terms_file, sequences_gzfile, out_fasta, uniprot_api_version
     print(f"Found {len(trembl_proteins)} TrEMBL proteins with missing aspects.")
     
     # Write output files
-    if include_all: # only append TrEMBL proteins to fasta file
+    if include_all: # including partial knowledge proteins, only append TrEMBL proteins to fasta file
         write_fasta(fasta_proteins, trembl_proteins, uniprot_api_version, out_fasta)
-    else: 
+    else: # only include proteins missing aspects (no knowledge and limited knowledge)
         write_missing_aspects_fasta(fasta_proteins, complete_proteins, trembl_proteins, uniprot_api_version, out_fasta)
     write_species(species, out_taxonomy)
     

@@ -18,7 +18,7 @@ from Bio import SeqIO
 import argparse   
 
 
-def naive_predict(query_file: str, annotations: sparse.csr_matrix, indices: str, output_baseline) -> pd.DataFrame:
+def naive_predict(annotations: sparse.csr_matrix, query_file: str, indices: str, output_baseline) -> pd.DataFrame:
     """
     Make predictions based on term frequencies in training annotations.
     
@@ -104,8 +104,8 @@ def parse_args(argv):
 def main():
     args = parse_args(sys.argv[1:])
     naive_predict(
-        query_file=args.query_file,
         annotations=args.annot_matrix,
+        query_file=args.query_file,
         indices=args.indices,
         output_baseline=args.output_baseline
     )

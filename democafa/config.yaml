@@ -14,13 +14,16 @@ go_codes:
     ELECTRONIC: ["IEA"]
     
 raw_file_paths:
-    uniprot_goa: "data/raw/goa_human.gaf.220.gz"
-    uniprot_sprot: "data/raw/uniprot_sprot.fasta.gz"
-    obo: "data/raw/go-basic.obo"
+    uniprot_goa: "raw/goa_human.gaf.220.gz"
+    uniprot_sprot: "raw/uniprot_sprot.fasta.gz"
+    obo: "raw/go-basic.obo"
     
 processed_paths:
-    train_terms: "../data/processed/train_terms.tsv"
-    train_sequences: "../data/processed/train_sequences.fasta"
+    train_terms: "processed/train_terms.tsv"
+    train_sequences: "processed/train_sequences.fasta"
+    train_matrix: "processed/train_terms_propagated.npz"
+    matrix_indices: "processed/train_terms_indices.pkl"
+    test_sequences: "processed/test_superset.fasta"
     
     
 # VERSIONS = {
