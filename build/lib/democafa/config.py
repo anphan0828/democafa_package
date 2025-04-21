@@ -2,6 +2,7 @@ import yaml
 import os
 
 DATA_DIR = os.environ.get('DATA_DIR', 'data')
+UTILS_DIR = os.environ.get('UTILS_DIR', 'democafa')
 
 def load_config(config_file="config.yaml"):
     """Loads configuration from a YAML file."""
@@ -26,8 +27,15 @@ if config:
     PROCESSED_PATHS = config.get('processed_paths', {})
     for key in PROCESSED_PATHS:
         PROCESSED_PATHS[key] = os.path.join(DATA_DIR, PROCESSED_PATHS[key])
+    RELEASE_PATHS = config.get('release_paths', {})
+    for key in RELEASE_PATHS:
+        RELEASE_PATHS[key] = os.path.join(DATA_DIR, RELEASE_PATHS[key])
+    EXTERNAL_TOOLS = config.get('external_tools', {})
+    for key in EXTERNAL_TOOLS:
+        EXTERNAL_TOOLS[key] = os.path.join(UTILS_DIR, EXTERNAL_TOOLS[key])
 else:
     VERSIONS = {}
     GO_CODES = {}
     RAW_FILE_PATHS = {}
     PROCESSED_PATHS = {}
+    RELEASE_PATHS = {}

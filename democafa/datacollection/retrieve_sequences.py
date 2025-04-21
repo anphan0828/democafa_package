@@ -37,9 +37,6 @@ def process_uniprot_fasta(input_fasta, input_terms, output_taxonomy, output_fast
             open(output_fasta, "w") as fasta_out, \
             open(output_taxonomy, "w") as mapping_out:
         
-        # Write header for mapping file
-        mapping_out.write("EntryID\ttaxonomyID\n")
-        
         # Process each sequence record
         for record in SeqIO.parse(gz_file, "fasta"):
             seq_count += 1

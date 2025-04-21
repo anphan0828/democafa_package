@@ -4,6 +4,8 @@ versions:
     UniProt_GOA_version: "2023-12-08"
     UniProt_GOA_file: "https://ftp.ebi.ac.uk/pub/databases/GO/goa/old/HUMAN/goa_human.gaf.220.gz"
     OBO: "https://release.geneontology.org/2023-11-15/ontology/go-basic.obo"
+    prott5_model: "/work/idoerg/ahphan/.cache/huggingface/"
+
     
 go_codes:
     EXPERIMENTAL: ["EXP", "IDA", "IPI", "IMP", "IGI", "IEP", "HTP", "HDA", "HMP", "HGI", "HEP"]
@@ -22,15 +24,24 @@ processed_paths:
     train_terms: "processed/train_terms.tsv"
     train_sequences: "processed/train_sequences.fasta"
     train_matrix: "processed/train_terms_propagated.npz"
+    train_taxonomy: "processed/train_taxonomy.tsv"
     matrix_indices: "processed/train_terms_indices.pkl"
     test_sequences: "processed/test_superset.fasta"
+    test_sequences_all: "processed/test_superset_all.fasta"
+    test_taxonomy: "processed/testsuperset-taxon-list.tsv"
+    output_blast: "processed/blast_results.tsv"
+    output_prott5: "processed/prott5_results.tsv"
+    baseline_goa_nonexp: "processed/goa_nonexp_baseline.tsv.gz"
+    baseline_naive: "processed/naive_baseline.tsv.gz"
+    baseline_blast: "processed/blast_baseline.tsv.gz"
+    baseline_prott5: "processed/prott5_baseline.tsv.gz"
     
+release_paths:
+    test_sequences: "release/test_superset.fasta"
+    test_sequences_all: "release/test_superset_all.fasta"
+    test_taxonomy: "release/testsuperset-taxon-list.tsv"
     
-# VERSIONS = {
-#     "UniProt_version": "2023_05",
-#     "UniProt_sprot_file": " https://ftp.ebi.ac.uk/pub/databases/uniprot/previous_releases/release-2023_05/knowledgebase/uniprot_sprot-only2023_05.tar.gz",
-#     "UniProt_GOA_version": "2023-12-08",
-#     "UniProt_GOA_file":"https://ftp.ebi.ac.uk/pub/databases/GO/goa/old/HUMAN/goa_human.gaf.220.gz",
-#     "OBO": "https://release.geneontology.org/2023-11-15/ontology/go-basic.obo"
+external_tools:
+    blast: "utils/run_blast.sh"
+    prott5: "utils/run_prott5.sh"
     
-# }

@@ -23,15 +23,19 @@ This project is a CAFA (Critical Assessment of protein Function Annotation) impl
         *   **create\_test\_set.py:** Creates the combined test set.
         *   **retrieve\_sequences.py:** Collects sequence data.
         *   **retrieve\_terms.py:** Retrieves GO terms.
-    *   **predictors:** Contains modules implementing prediction algorithms.
-        *   **\_\_init\_\_.py:** Initializes the predictors module.
+    *   **baselines:** Contains modules implementing prediction algorithms.
+        *   **\_\_init\_\_.py:** Initializes the baselines module.
         *   **blast.py:** Implements a BLAST-based prediction algorithm.
         *   **goa_nonexp.py:** Implements a non-experimental GO annotations baseline prediction.
         *   **naive.py:** Implements a naive prediction algorithm.
+        *   **prott5.py:** Implements a ProtT5-embeddings-based prediction algorith.
     *   **utils:** Contains utility modules.
         *   **\_\_init\_\_.py:** Initializes the utilities module.
         *   **dask\_write.py:** Provides utilities for working with Dask for efficient data writing operations.
         *   **ontology.py:** Provides shared ontology processing functions.
+        *   **run_blast.sh:** Runs external NCBI BLAST (shell script) from terminal with bioconda::blast.
+        *   **run_prott5.sh:** Runs external ProtT5 embeddings (shell script) from terminal with hugging face model.
+        *   **prott5-baseline:** Folder containing scripts for ProtT5 embeddings retrieval.
 *   **data:** Contains raw and processed data.        
 *   **tests:** Contains test files mirroring the package structure.
 *   **build:** Contains build artifacts.
@@ -54,17 +58,22 @@ democafa_package/
             retrieve_terms.py
             retrieve_sequences.py
             create_test_set.py
-        predictors/
+        baselines/
             __init__.py
             naive.py
             blast.py
             goa_nonexp.py
+            prott5.py
         utils/
             __init__.py
             ontology.py
             dask_write.py
+            run_blast.sh
+            run_prott5.sh
+            prott5-baseline/
     tests/
     build/
+    democafaenv.yaml
     pyproject.toml
     setup.py
     README.md
@@ -74,18 +83,25 @@ democafa_package/
 
 To use this project, follow these steps:
 
+0.  **Conda environments:** 
+*   Create main CAFA environment using `conda env create -f democafaenv.yaml`, then activate it using `conda activate democafaenv`. 
+*   Create another environment to run prott5:
+```
+conda create --name prott5-env python=3.10 
+conda activate prott5-env
+conda install pytorch torchvision torchaudio -c pytorch
+conda install h5py transformers tqdm joblib scikit-learn scipy sentencepiece -c conda-forge
+```
 1.  **Installation:** Install the package using `pip install .` (from the `democafa_package` directory).
 2.  **Configuration:** Configure the necessary settings in the `config` modules.
-3.  **Data Preparation:** Run the scripts in the `data` module to retrieve and prepare the data.
-4.  **Prediction:** Use the scripts in the `predictors` module to make predictions.
+3.  **Data Preparation:** Run the scripts in the `datacollection` module to retrieve and prepare the data.
+4.  **Baseline Prediction:** Use the scripts in the `baselines` module to make baseline predictions.
 5.  **Evaluation:** Evaluate the predictions using the appropriate evaluation scripts.
 
 # TODO:
-- Instructions & run BLAST
 - Allow the use of GAF file for predictors (in addition to annotated sparse matrix)
 - Sparse matrix is currently stored as 3 separate aspects for smaller files
 - Add feature to rerun any step of choice
 - Add evaluator as a subpackage
-- Add installation instructions (via pip or via conda environment)
 - Add example data
 - Use logging module
