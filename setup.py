@@ -1,7 +1,7 @@
-from setuptools import setup
+from setuptools import setup, find_packages
 
 setup(
     name='democafa',
     version='0.1.0',
-    packages=['democafa']
+    packages=find_packages()
 )

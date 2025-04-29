@@ -35,15 +35,17 @@ while getopts "q:d:m:o:" opt; do
     ;;
   esac
 done
-# TODO: run in which directory?
+
+out_evalset="../data/processed/prott5/evalset_embeddings.h5"
+out_dbset="../data/processed/prott5/blast_db_embeddings.h5"
 echo "Running prott5 embeddings for evaluation set"
-python utils/prott5-baseline/prott5_embedder.py --input $query --output ../data/processed/prott5/evalset_embeddings.h5 --per_protein 1 --model $model
+python utils/prott5-baseline/prott5_embedder.py --input $query --output $out_evalset --per_protein 1 --model $model
 
 echo "Running prott5 embeddings for database set"
-python utils/prott5-baseline/prott5_embedder.py --input $database --output ../data/processed/prott5/blast_db_embeddings.h5 --per_protein 1 --model $model
+python utils/prott5-baseline/prott5_embedder.py --input $database --output $out_dbset --per_protein 1 --model $model
 
 echo "Processing embeddings to $output"
-python utils/prott5-baseline/process_embeddings_gpu.py $output
+python utils/prott5-baseline/process_embeddings_gpu.py $out_evalset $out_dbset $output
 
 python utils/prott5-baseline/normalize_embeddings.py $output
 

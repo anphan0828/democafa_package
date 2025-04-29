@@ -5,7 +5,8 @@ versions:
     UniProt_GOA_file: "https://ftp.ebi.ac.uk/pub/databases/GO/goa/old/HUMAN/goa_human.gaf.220.gz"
     OBO: "https://release.geneontology.org/2023-11-15/ontology/go-basic.obo"
     prott5_model: "/work/idoerg/ahphan/.cache/huggingface/"
-
+    OBO_t0: "https://release.geneontology.org/2024-01-17/ontology/go-basic.obo"
+    OBO_t1: "https://release.geneontology.org/2024-06-17/ontology/go-basic.obo"
     
 go_codes:
     EXPERIMENTAL: ["EXP", "IDA", "IPI", "IMP", "IGI", "IEP", "HTP", "HDA", "HMP", "HGI", "HEP"]
@@ -16,9 +17,13 @@ go_codes:
     ELECTRONIC: ["IEA"]
     
 raw_file_paths:
-    uniprot_goa: "raw/goa_human.gaf.220.gz"
     uniprot_sprot: "raw/uniprot_sprot.fasta.gz"
+    uniprot_goa: "raw/goa_human.gaf.220.gz"
     obo: "raw/go-basic.obo"
+    t0_uniprot_goa: "raw/goa_human.gaf.221.gz"
+    t0_obo: "raw/t0_go-basic.obo" 
+    t1_uniprot_goa: "raw/goa_human.gaf.224.gz"
+    t1_obo: "raw/t1_go-basic.obo" # TODO: check which obo version the t1 uses
     
 processed_paths:
     train_terms: "processed/train_terms.tsv"
@@ -26,15 +31,20 @@ processed_paths:
     train_matrix: "processed/train_terms_propagated.npz"
     train_taxonomy: "processed/train_taxonomy.tsv"
     matrix_indices: "processed/train_terms_indices.pkl"
+    train_ia: "processed/ia.tsv"
     test_sequences: "processed/test_superset.fasta"
     test_sequences_all: "processed/test_superset_all.fasta"
     test_taxonomy: "processed/testsuperset-taxon-list.tsv"
     output_blast: "processed/blast_results.tsv"
-    output_prott5: "processed/prott5_results.tsv"
+    output_prott5_raw: "processed/prott5_results.tsv"
+    output_prott5: "processed/prott5_results_norm.tsv"
     baseline_goa_nonexp: "processed/goa_nonexp_baseline.tsv.gz"
     baseline_naive: "processed/naive_baseline.tsv.gz"
     baseline_blast: "processed/blast_baseline.tsv.gz"
     baseline_prott5: "processed/prott5_baseline.tsv.gz"
+    t0_baseline_goa_nonexp: "processed/t0_goa_nonexp_baseline.tsv.gz"
+    t1_terms: "processed/t1_terms.tsv"
+    t1_ground_truth: "processed/t1_ground_truth.tsv"
     
 release_paths:
     test_sequences: "release/test_superset.fasta"

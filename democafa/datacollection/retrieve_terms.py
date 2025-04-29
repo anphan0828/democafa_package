@@ -22,6 +22,7 @@ import networkx as nx
 import numpy as np
 from Bio.UniProt import GOA
 from Bio import SwissProt as sp
+from democafa.config import GO_CODES
 
 def parse_inputs(argv):
     parser = argparse.ArgumentParser(
@@ -108,7 +109,7 @@ def filter_evidence_codes(go_codes, selected='Experimental,IC,TAS'):
             print(f"Warning: '{code}' is not a recognized evidence code.")
     return {'Evidence': set(accepted_codes)}
 
-def read_gaf(handle, go_codes, selected):
+def read_gaf(handle, selected):
     """
     Read and process a GAF file (gzipped or plain text)
     """
@@ -117,7 +118,7 @@ def read_gaf(handle, go_codes, selected):
         name = os.path.splitext(name)[0]
     
     all_protein_name = set()
-    selected_codes = filter_evidence_codes(go_codes, selected)
+    selected_codes = filter_evidence_codes(GO_CODES, selected)
     data = []
     
     # Get content starting from !gaf-version
@@ -142,7 +143,7 @@ def read_gaf(handle, go_codes, selected):
     return name, df, all_protein_name
 
 
-def process_go_from_dat(file_path, go_codes, selected):
+def process_go_from_dat(file_path, selected):
     # TODO: Add support for other evidence codes
     entries = []
     with open(file_path, 'r') as file:
@@ -197,16 +198,16 @@ def replace_alternate_GO_terms(df, ontology_graph):
     df['term'] = df['term'].map(lambda x: alt_id_to_id.get(x, x))
     return df
 
-def wrapper_retrieve_terms(annot_file, filetype, go_codes, selected_go_codes, graph, output_tsv):
+def wrapper_retrieve_terms(annot_file, filetype, selected_go_codes, graph, output_tsv):
     # load ontology graph and GO terms. obonet doesn't store OBSOLETE terms
     ontology_graph = clean_ontology_edges(obonet.read_obo(graph))
     # roots = {'P': 'GO:0008150', 'C': 'GO:0005575', 'F': 'GO:0003674'}
     # subontologies = {aspect: fetch_aspect(ontology_graph, roots[aspect]) for aspect in roots}
     
     if filetype == 'goa':
-        name,annotation_df,all_protein = read_gaf(annot_file, go_codes, selected_go_codes)
+        name,annotation_df,all_protein = read_gaf(annot_file, selected_go_codes)
     elif filetype == 'dat':
-        annotation_df = process_go_from_dat(annot_file, go_codes, selected_go_codes)
+        annotation_df = process_go_from_dat(annot_file, selected_go_codes)
     obsolete_terms = set(annotation_df['term']) - set(ontology_graph.nodes())
     if obsolete_terms:
         print(f"Warning: {len(obsolete_terms)} obsolete terms ({obsolete_terms}) found in the annotation file.")
@@ -220,7 +221,6 @@ def main():
     wrapper_retrieve_terms(
         annot_file=args.annot,
         filetype=args.filetype,
-        go_codes=args.go_codes,
         selected_go_codes=args.evidence,
         graph=args.graph,
         output_tsv=args.tsv

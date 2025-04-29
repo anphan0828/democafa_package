@@ -1,16 +1,18 @@
 #!/usr/bin/env python3
 
 import os
-from config import VERSIONS, GO_CODES, RAW_FILE_PATHS, PROCESSED_PATHS, RELEASE_PATHS, EXTERNAL_TOOLS
-from datacollection.retrieve_terms import wrapper_retrieve_terms
-from datacollection.retrieve_sequences import process_uniprot_fasta
-from datacollection.create_test_set import create_test_set
-from utils.ontology import propagate_and_ia
+from democafa.config import VERSIONS, GO_CODES, RAW_FILE_PATHS, PROCESSED_PATHS, RELEASE_PATHS, EXTERNAL_TOOLS
+from democafa.datacollection.retrieve_terms import wrapper_retrieve_terms
+from democafa.datacollection.retrieve_sequences import process_uniprot_fasta
+from democafa.datacollection.create_test_set import create_test_set
+from democafa.utils.ontology import propagate_and_ia
 
-from baselines.blast import blast_predict
-from baselines.naive import naive_predict
-from baselines.goa_nonexp import goa_nonexp_predict
+from democafa.baselines.blast import blast_predict
+from democafa.baselines.naive import naive_predict
+from democafa.baselines.goa_nonexp import goa_nonexp_predict
+from democafa.baselines.prott5 import prott5_predict
 
+from democafa.groundtruth.classify_ground_truth import wrapper_ground_truth
 
 def main():
     # 0. Load configuration
@@ -82,20 +84,57 @@ def main():
             output_baseline=PROCESSED_PATHS['baseline_naive'] 
         )
     
-    os.system(f'mkdir -p {DATA_DIR}/blast_db && cp {PROCESSED_PATHS["train_sequences"]} {DATA_DIR}/blast_db/')
-    os.system(f'sbatch {EXTERNAL_TOOLS["blast"]}')
-    blast_predict(
-        annotations=PROCESSED_PATHS['train_matrix'],
-        query_file=RELEASE_PATHS['test_sequences'],
-        indices=PROCESSED_PATHS['matrix_indices'],
-        blast_results=PROCESSED_PATHS['output_blast'],
-        output_baseline=PROCESSED_PATHS['baseline_blast'],
-        keep_self_hits=False,
-        use_rscore=False
-    )
+    # os.system(f'mkdir -p {DATA_DIR}/processed/blast_db && cp {PROCESSED_PATHS["train_sequences"]} {DATA_DIR}/processed/blast_db/')
+    # os.system(f'sbatch {EXTERNAL_TOOLS["blast"]}') # TODO: consider a separate shell script
+    if not os.path.exists(PROCESSED_PATHS['baseline_blast']):
+        blast_predict(
+            annotations=PROCESSED_PATHS['train_matrix'],
+            query_file=RELEASE_PATHS['test_sequences'],
+            indices=PROCESSED_PATHS['matrix_indices'],
+            blast_results=PROCESSED_PATHS['output_blast'],
+            output_baseline=PROCESSED_PATHS['baseline_blast'],
+            keep_self_hits=False,
+            use_rscore=False
+        )
     
-    os.system(f'sbatch {EXTERNAL_TOOLS["prott5"]}')
-    
+    os.system(f'mkdir -p {DATA_DIR}/processed/prott5')
+    # os.system(f'sbatch {EXTERNAL_TOOLS["prott5"]} -q {RELEASE_PATHS["test_sequences"]} -d {PROCESSED_PATHS["train_sequences"]} -m {VERSIONS["prott5_model"]} -o {PROCESSED_PATHS["output_prott5_raw"]}')
+    if not os.path.exists(PROCESSED_PATHS['baseline_prott5']):
+        prott5_predict(
+            annotations=PROCESSED_PATHS['train_matrix'],
+            query_file=RELEASE_PATHS['test_sequences'],
+            indices=PROCESSED_PATHS['matrix_indices'],
+            prott5_results=PROCESSED_PATHS['output_prott5'],
+            output_baseline=PROCESSED_PATHS['baseline_prott5'],
+            keep_self_hits=False
+        )
+        
     # 3. Evaluation
+    os.system(f'mkdir -p {DATA_DIR}/processed/predictions')
+    os.system(f'cp {PROCESSED_PATHS["baseline_goa_nonexp"]} {DATA_DIR}/processed/predictions/')
+    os.system(f'cp {PROCESSED_PATHS["baseline_naive"]} {DATA_DIR}/processed/predictions/')
+    os.system(f'cp {PROCESSED_PATHS["baseline_blast"]} {DATA_DIR}/processed/predictions/')
+    os.system(f'cp {PROCESSED_PATHS["baseline_prott5"]} {DATA_DIR}/processed/predictions/')
+    
+    # Collect ground truth from a later release
+    if not os.path.exists(PROCESSED_PATHS['t1_terms']):
+        wrapper_retrieve_terms(
+            annot_file=RAW_FILE_PATHS['t0_uniprot_goa'],
+            filetype='goa',
+            go_codes=config_go_codes,
+            selected_go_codes='Experimental,IC,TAS',
+            graph=RAW_FILE_PATHS['t1_obo'],
+            output_tsv=PROCESSED_PATHS['t1_terms']
+        )
+    else:
+        print(f"{PROCESSED_PATHS['t1_terms']} already exists")
+    
+    # if not os.path.exists(PROCESSED_PATHS['t1_ground_truth']):
+    #     classify_ground_truth(
+    #         annot_file=PROCESSED_PATHS['t1_terms'],
+    #         query_file=PROCESSED_PATHS['test_sequences'],
+    #         output_baseline=PROCESSED_PATHS['t1_ground_truth']
+    #     )
+    
 if __name__ == "__main__":
     main()

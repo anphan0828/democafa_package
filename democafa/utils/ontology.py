@@ -226,7 +226,7 @@ def propagate_and_ia(terms_file, graph, matrix_propagated, matrix_indices, outpu
     
     if matrix_propagated and matrix_indices:
         print(f'Saving to file {matrix_propagated}')
-        save_npz(matrix_propagated.tocsr(), matrix3)
+        save_npz(matrix_propagated, matrix3.tocsr())
         with open(matrix_indices, 'wb') as f:
             cp.dump((pidx3, tidx3), f)    
                     
