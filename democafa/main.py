@@ -127,15 +127,16 @@ def main():
     else:
         print(f"{PROCESSED_PATHS['t1_terms']} already exists")
     
-    # if not os.path.exists(PROCESSED_PATHS['t1_ground_truth']):
+    if not os.path.exists(f"{PROCESSED_PATHS['t1_ground_truth']}_NK.tsv"):
         wrapper_ground_truth(
             annot=PROCESSED_PATHS['train_terms'],
-            annot=PROCESSED_PATHS['t1_terms'],           
+            annot2=PROCESSED_PATHS['t1_terms'],           
             query_file=PROCESSED_PATHS['test_sequences'],
-            filetype='goa',
             graph=RAW_FILE_PATHS['obo'],
+            graph2=RAW_FILE_PATHS['t1_obo'],
             out_prefix=PROCESSED_PATHS['t1_ground_truth']
         )
+    
     
 if __name__ == "__main__":
     main()
