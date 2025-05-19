@@ -104,16 +104,19 @@ To rerun any step within the pipeline, run the following command from the root d
 python3 -m democafabaselines.goa_nonexp <provide arguments as needed>
 ```
 
+## Additional notes
+- Baselines are constructed using GO at submission deadline (t0)
+    - To evaluate baselines: propagate using t0 obo, then intersect with obo (t-1), then propagate obo to ensure connectivity
+    - To evaluate any prediction: propagate using t-1 (the pivot graph)
+    - To make ground truth comparable with the predictions: propagate ground truth using t1 obo, then intersect with t-1 obo, then propagate using t-1 obo
+    - To use GO-slim: propagate predictions using GO slim obo (with roots included), intersect with t-1 obo, then propagate using t-1 obo
+    
+    
 # TODO:
 - Allow the use of GAF file for predictors (in addition to annotated sparse matrix)
 - Add example data
 - Add unit test
 - Use logging module
-- Baselines are constructed using GO at submission deadline (t0)
-    - To evaluate baselines: propagate using t0 obo, then intersect with obo (t-1), then propagate obo to ensure connectivity
-    - To evaluate any prediction: propagate using t-1 (the pivot graph)
-    - To make ground truth comparable with the predictions: propagate ground truth using t1 obo, then intersect with t-1 obo, then propagate
 - Proteins will be removed from evaluation set if their sequences changed between release and evaluation
-- Produce ground truth with 3 subsets: NK, LK, PK, using the proteins in the evaluation set
 - Separate script for run_blast and run_prott5, but access to config paths
 - Add rerun argument to each of the script

@@ -19,7 +19,7 @@ import numpy as np
 from Bio import SeqIO
 import gzip
 import scipy.sparse 
-from democafa.utils.ontology import clean_ontology_edges, fetch_aspect, propagate_terms, approach3_optimized
+from democafa.utils.ontology import clean_ontology_edges, fetch_aspect, propagate_terms, filter_terms_given_obo
 
 
 def parse_inputs(argv):
@@ -89,6 +89,7 @@ def wrapper_ground_truth(annot, annot2, query_file, graph, graph2, out_prefix):
     for protein, aspects in LK_dict.items():
         df = df2[(df2['EntryID'] == protein) & (df2['aspect'].isin(aspects))]
         LK_df = pd.concat([LK_df, df], ignore_index=True) # leaf only
+    # TODO: check if we still need to use filter_terms_given_obo here (since the df1 is already filtered)
     LK_t1 = filter_terms_given_obo(LK_df, current_graph=graph2, pivot_graph=graph)
     LK_t1.to_csv(f'{out_prefix.replace(".tsv","_LK.tsv")}', sep="\t", index=False, header=True) # new terms propagated
 
@@ -114,11 +115,6 @@ def wrapper_ground_truth(annot, annot2, query_file, graph, graph2, out_prefix):
     # Filter terms then propagate of filter2 with two graphs (do not filter terms in filter1 because it was generated from pivot graph)
     annotation_df2 = filter_terms_given_obo(filter2, current_graph=graph2, pivot_graph=graph)
     
-    # # Matrix comparison
-    # matrix1, pidx1, tidx1, _ = approach3_optimized(annotation_df1)
-    # matrix2, pidx2, tidx2, _ = approach3_optimized(annotation_df2)
-    # diff_matrix, union_pidx, union_tidx = efficient_matrix_comparison(matrix1, matrix2, pidx1, tidx1, pidx2, tidx2)
-    
     # Dataframe comparison
     temp_PK_df = pd.merge(temp_PK_aspects, annotation_df1, on=['EntryID', 'aspect'])
     temp_PK_df['term_before'] = temp_PK_df['term']
@@ -137,31 +133,6 @@ def wrapper_ground_truth(annot, annot2, query_file, graph, graph2, out_prefix):
     print(f"Number of proteins in NK: {len(NK)}, with {len(NK_t1)} terms")
     print(f"Number of proteins in LK: {len(LK_dict)}, with {len(LK_t1)} terms")
     print(f"Number of proteins in PK: {len(PK_aspects)}, with {len(PK_df)} new child terms gained")
-
-    
-def filter_terms_given_obo(terms_df, current_graph, pivot_graph):
-    """Remove terms on a future obo that is not in the chosen pivot graph"""
-    
-    # Propagate using current graph
-    ontology_graph = clean_ontology_edges(obonet.read_obo(current_graph))
-    roots = {'P': 'GO:0008150', 'C': 'GO:0005575', 'F': 'GO:0003674'}
-    subontologies = {aspect: fetch_aspect(ontology_graph, roots[aspect]) for aspect in roots} 
-    
-    prop_terms_df = propagate_terms(terms_df, subontologies)
-    before_length = len(prop_terms_df)
-    
-    # Compare with pivot graph, remove terms not in pivot graph
-    ontology_graph = clean_ontology_edges(obonet.read_obo(pivot_graph))
-    
-    prop_terms_df = prop_terms_df[prop_terms_df['term'].isin(ontology_graph.nodes())].reset_index(drop=True)
-    after_length = len(prop_terms_df)
-    print(f"Filtered terms from {before_length} to {after_length} using ontology graph {pivot_graph.split('/')[-1]}")
-    
-    # Propagate terms using the chosen pivot graph
-    subontologies = {aspect: fetch_aspect(ontology_graph, roots[aspect]) for aspect in roots} 
-    annotation_df = propagate_terms(prop_terms_df, subontologies)
-    
-    return annotation_df
 
 
 def efficient_matrix_comparison(matrix1, matrix2, pidx1, tidx1, pidx2, tidx2):

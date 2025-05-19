@@ -23,6 +23,8 @@ import numpy as np
 from Bio.UniProt import GOA
 from Bio import SwissProt as sp
 from democafa.config import GO_CODES
+from democafa.utils.ontology import clean_ontology_edges, fetch_aspect, propagate_terms, filter_terms_given_obo
+
 
 def parse_inputs(argv):
     parser = argparse.ArgumentParser(
@@ -36,6 +38,8 @@ def parse_inputs(argv):
                         help='Input file type')
     parser.add_argument('--graph', '-g', default=None, 
                         help='Path to OBO ontology graph file if local. If empty (default) current OBO structure at run-time will be downloaded from http://purl.obolibrary.org/obo/go/go-basic.obo')
+    parser.add_argument('--add_graph', '-g2', default=None,
+                        help='Path to OBO ontology graph of a later timepoint. Provide this graph to remove terms that are not in frozen graph.')
     parser.add_argument('--tsv', default='data/release/train_terms.tsv',
                         help='Path to save annotations in TSV format')
     return parser.parse_args(argv)
@@ -198,23 +202,33 @@ def replace_alternate_GO_terms(df, ontology_graph):
     df['term'] = df['term'].map(lambda x: alt_id_to_id.get(x, x))
     return df
 
-def wrapper_retrieve_terms(annot_file, filetype, selected_go_codes, graph, output_tsv):
-    # load ontology graph and GO terms. obonet doesn't store OBSOLETE terms
-    ontology_graph = clean_ontology_edges(obonet.read_obo(graph))
-    # roots = {'P': 'GO:0008150', 'C': 'GO:0005575', 'F': 'GO:0003674'}
-    # subontologies = {aspect: fetch_aspect(ontology_graph, roots[aspect]) for aspect in roots}
-    
+def wrapper_retrieve_terms(annot_file, filetype, selected_go_codes, graph, graph2, output_tsv):
+    # Load annotations from GOA file
     if filetype == 'goa':
         name,annotation_df,all_protein = read_gaf(annot_file, selected_go_codes)
     elif filetype == 'dat':
         annotation_df = process_go_from_dat(annot_file, selected_go_codes)
+        
+    # load ontology graph and GO terms. obonet doesn't store OBSOLETE terms
+    if graph2 is None:
+        ontology_graph = clean_ontology_edges(obonet.read_obo(graph))
+    else:
+        ontology_graph = clean_ontology_edges(obonet.read_obo(graph2))
+    annotation_df = replace_alternate_GO_terms(annotation_df, ontology_graph)
+    
     obsolete_terms = set(annotation_df['term']) - set(ontology_graph.nodes())
     if obsolete_terms:
         print(f"Warning: {len(obsolete_terms)} obsolete terms ({obsolete_terms}) found in the annotation file.")
+        print(f"These terms will not appear in terms file.")
         annotation_df = annotation_df[~annotation_df['term'].isin(obsolete_terms)]
-    annotation_df = replace_alternate_GO_terms(annotation_df, ontology_graph)
-    # Write annotations to TSV file
-    annotation_df.to_csv(output_tsv, sep='\t', index=False)
+    
+    # Remove terms that are not in the frozen graph in 3 steps 
+    # (propagate using graph2, intersect with graph terms, propagate again with graph)
+    if graph2 is not None:
+        annotation_df_filtered = filter_terms_given_obo(annotation_df, graph, graph2)
+        annotation_df_filtered.to_csv(output_tsv, sep='\t', index=False)
+    else:
+        annotation_df.to_csv(output_tsv, sep='\t', index=False)
     
 def main():
     args = parse_inputs(sys.argv[1:])
@@ -223,6 +237,7 @@ def main():
         filetype=args.filetype,
         selected_go_codes=args.evidence,
         graph=args.graph,
+        graph2=args.add_graph,
         output_tsv=args.tsv
     )
     

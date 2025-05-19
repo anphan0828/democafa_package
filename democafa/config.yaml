@@ -43,6 +43,7 @@ processed_paths:
     baseline_blast: "processed/blast_baseline.tsv.gz"
     baseline_prott5: "processed/prott5_baseline.tsv.gz"
     t0_baseline_goa_nonexp: "processed/t0_goa_nonexp_baseline.tsv.gz"
+    t0_terms: "processed/t0_terms.tsv"
     t1_terms: "processed/t1_terms.tsv"
     t1_ground_truth: "processed/t1_ground_truth.tsv"
     

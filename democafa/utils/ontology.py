@@ -71,6 +71,31 @@ def propagate_terms(terms_df, subontologies):
     return pd.DataFrame(propagated_terms)
 
 
+def filter_terms_given_obo(terms_df, current_graph, pivot_graph):
+    """Remove terms on a future obo that is not in the chosen pivot graph"""
+    
+    # Propagate using current graph
+    ontology_graph = clean_ontology_edges(obonet.read_obo(current_graph))
+    roots = {'P': 'GO:0008150', 'C': 'GO:0005575', 'F': 'GO:0003674'}
+    subontologies = {aspect: fetch_aspect(ontology_graph, roots[aspect]) for aspect in roots} 
+    
+    prop_terms_df = propagate_terms(terms_df, subontologies)
+    before_length = len(prop_terms_df)
+    
+    # Compare with pivot graph, remove terms not in pivot graph
+    ontology_graph = clean_ontology_edges(obonet.read_obo(pivot_graph))
+    
+    prop_terms_df = prop_terms_df[prop_terms_df['term'].isin(ontology_graph.nodes())].reset_index(drop=True)
+    after_length = len(prop_terms_df)
+    print(f"Filtered terms from {before_length} to {after_length} using ontology graph {pivot_graph.split('/')[-1]}")
+    
+    # Propagate terms using the chosen pivot graph
+    subontologies = {aspect: fetch_aspect(ontology_graph, roots[aspect]) for aspect in roots} 
+    annotation_df = propagate_terms(prop_terms_df, subontologies)
+    
+    return annotation_df
+
+
 def term_counts(terms_df, term_indices):
     """
     Count the number of instances of each term

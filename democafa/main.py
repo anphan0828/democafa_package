@@ -115,24 +115,40 @@ def main():
     # os.system(f'cp {PROCESSED_PATHS["baseline_blast"]} {DATA_DIR}/processed/predictions/')
     # os.system(f'cp {PROCESSED_PATHS["baseline_prott5"]} {DATA_DIR}/processed/predictions/')
     
-    # Collect ground truth from a later release
+    # Collect known terms by end of submission (t0)
+    if not os.path.exists(PROCESSED_PATHS['t0_terms']):
+        wrapper_retrieve_terms(
+            annot_file=RAW_FILE_PATHS['t0_uniprot_goa'],
+            filetype='goa',
+            selected_go_codes='Experimental,IC,TAS',
+            graph=RAW_FILE_PATHS['obo'],
+            add_graph=RAW_FILE_PATHS['t0_obo'],
+            output_tsv=PROCESSED_PATHS['t0_terms']
+        )
+    else:
+        print(f"{PROCESSED_PATHS['t0_terms']} already exists")
+    
+    # Collect t1 ground truth from a later release
     if not os.path.exists(PROCESSED_PATHS['t1_terms']):
         wrapper_retrieve_terms(
             annot_file=RAW_FILE_PATHS['t1_uniprot_goa'],
             filetype='goa',
             selected_go_codes='Experimental,IC,TAS',
-            graph=RAW_FILE_PATHS['t1_obo'],
+            graph=RAW_FILE_PATHS['t0_obo'],
+            add_graph=RAW_FILE_PATHS['t1_obo'],
             output_tsv=PROCESSED_PATHS['t1_terms']
         )
     else:
         print(f"{PROCESSED_PATHS['t1_terms']} already exists")
     
+    # TODO: then do not use wrapper_ground_truth until the very end, do we need t-1 obo here
+    # TODO: add a step of removing t1 terms that are in t0 in the classify_ground_truth function
     if not os.path.exists(f"{PROCESSED_PATHS['t1_ground_truth']}_NK.tsv"):
         wrapper_ground_truth(
-            annot=PROCESSED_PATHS['train_terms'],
+            annot=PROCESSED_PATHS['t0_terms'],
             annot2=PROCESSED_PATHS['t1_terms'],           
             query_file=PROCESSED_PATHS['test_sequences'],
-            graph=RAW_FILE_PATHS['obo'],
+            graph=RAW_FILE_PATHS['t0_obo'],
             graph2=RAW_FILE_PATHS['t1_obo'],
             out_prefix=PROCESSED_PATHS['t1_ground_truth']
         )
