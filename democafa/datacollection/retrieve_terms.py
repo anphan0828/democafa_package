@@ -148,33 +148,37 @@ def read_gaf(handle, selected):
 
 
 def process_go_from_dat(file_path, selected):
-    # TODO: Add support for other evidence codes
     entries = []
-    with open(file_path, 'r') as file:
-        for record in sp.parse(file):
-            if not record.taxonomy_id:
-                continue
-            if '9606' not in record.taxonomy_id:  # Only human proteins
-                continue
-            current_id = record.accessions[0]
-            for dr in record.cross_references:    #dr -> db cross refernce
-                if dr[0] == 'GO' and len(dr) >= 4:
-                    go_id = dr[1]
-                    aspect = dr[2][0]  # Getting only the first letter (its either P/ C/ F)
-                    # aspect_description = dr[2][2:]  # Getting the rest of the description
-                    evidence = dr[3] if len(dr) >= 4 else ''
-                    evidence_code = evidence[:3]  # First 3 letters of evidence
-                    if evidence_code not in selected:
-                        continue
-                    # evidence_source = evidence[4:] if len(evidence) > 4 else ''
-                    entries.append({
-                        "EntryID": current_id,
-                        "term": go_id,
-                        "aspect": aspect
-                        #"Aspect_Description": aspect_description.strip(),
-                        # "evidence": evidence_code.strip(),
-                        # #"Evidence Source": evidence_source.strip()
-                    })
+    selected_codes = filter_evidence_codes(GO_CODES, selected).get('Evidence')
+    is_gzipped = file_path.endswith('.gz')
+    if is_gzipped:
+        handle = gzip.open(file_path, 'rt')
+    else:
+        handle = open(file_path, 'r')
+    for record in sp.parse(handle):
+        if not record.taxonomy_id:
+            continue
+        if '9606' not in record.taxonomy_id:  # Only human proteins
+            continue
+        current_id = record.accessions[0]
+        for dr in record.cross_references:    #dr -> db cross refernce
+            if dr[0] == 'GO' and len(dr) >= 4:
+                go_id = dr[1]
+                aspect = dr[2][0]  # Getting only the first letter (its either P/ C/ F)
+                # aspect_description = dr[2][2:]  # Getting the rest of the description
+                evidence = dr[3] if len(dr) >= 4 else ''
+                evidence_code = evidence[:3]  # First 3 letters of evidence
+                if evidence_code not in selected_codes:
+                    continue
+                # evidence_source = evidence[4:] if len(evidence) > 4 else ''
+                entries.append({
+                    "EntryID": current_id,
+                    "term": go_id,
+                    "aspect": aspect
+                    #"Aspect_Description": aspect_description.strip(),
+                    # "evidence": evidence_code.strip(),
+                    # #"Evidence Source": evidence_source.strip()
+                })
     df = pd.DataFrame(entries)
     df = df.drop_duplicates()
     return df
@@ -202,7 +206,7 @@ def replace_alternate_GO_terms(df, ontology_graph):
     df['term'] = df['term'].map(lambda x: alt_id_to_id.get(x, x))
     return df
 
-def wrapper_retrieve_terms(annot_file, filetype, selected_go_codes, graph, graph2, output_tsv):
+def wrapper_retrieve_terms(annot_file, filetype, selected_go_codes, graph, add_graph, output_tsv):
     # Load annotations from GOA file
     if filetype == 'goa':
         name,annotation_df,all_protein = read_gaf(annot_file, selected_go_codes)
@@ -210,10 +214,10 @@ def wrapper_retrieve_terms(annot_file, filetype, selected_go_codes, graph, graph
         annotation_df = process_go_from_dat(annot_file, selected_go_codes)
         
     # load ontology graph and GO terms. obonet doesn't store OBSOLETE terms
-    if graph2 is None:
+    if add_graph is None:
         ontology_graph = clean_ontology_edges(obonet.read_obo(graph))
     else:
-        ontology_graph = clean_ontology_edges(obonet.read_obo(graph2))
+        ontology_graph = clean_ontology_edges(obonet.read_obo(add_graph))
     annotation_df = replace_alternate_GO_terms(annotation_df, ontology_graph)
     
     obsolete_terms = set(annotation_df['term']) - set(ontology_graph.nodes())
@@ -224,8 +228,8 @@ def wrapper_retrieve_terms(annot_file, filetype, selected_go_codes, graph, graph
     
     # Remove terms that are not in the frozen graph in 3 steps 
     # (propagate using graph2, intersect with graph terms, propagate again with graph)
-    if graph2 is not None:
-        annotation_df_filtered = filter_terms_given_obo(annotation_df, graph, graph2)
+    if add_graph is not None:
+        annotation_df_filtered = filter_terms_given_obo(annotation_df, graph, add_graph)
         annotation_df_filtered.to_csv(output_tsv, sep='\t', index=False)
     else:
         annotation_df.to_csv(output_tsv, sep='\t', index=False)
@@ -237,7 +241,7 @@ def main():
         filetype=args.filetype,
         selected_go_codes=args.evidence,
         graph=args.graph,
-        graph2=args.add_graph,
+        add_graph=args.add_graph,
         output_tsv=args.tsv
     )
     
