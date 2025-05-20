@@ -1,4 +1,4 @@
-name: 
+name: democafaenv
 channels:
 - bioconda
 - conda-forge
