@@ -101,7 +101,7 @@ conda install h5py transformers tqdm joblib scikit-learn scipy sentencepiece -c 
 To rerun any step within the pipeline, run the following command from the root directory (`democafa_package/`)
 
 ```
-python3 -m democafabaselines.goa_nonexp <provide arguments as needed>
+python3 -m democafa.baselines.goa_nonexp <provide arguments as needed>
 ```
 
 ## Additional notes
@@ -113,7 +113,8 @@ python3 -m democafabaselines.goa_nonexp <provide arguments as needed>
     
     
 # TODO:
-- Allow the use of GAF file for predictors (in addition to annotated sparse matrix)
+- Use uniprot_goa_all.gaf.gz instead of swissprot.dat.gz for training data
+- Test superset doesn't contain trembl sequences (and only the species in the taxon list)
 - Add example data
 - Add unit test
 - Use logging module

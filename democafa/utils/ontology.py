@@ -1,4 +1,4 @@
-# src/democafa/utils/ontology.py
+#!/usr/bin/env python3
 
 import sys
 import argparse
@@ -199,7 +199,7 @@ def approach2_term_counts(annotation_df):
     return S, protein_idx, term_indices, end_time - start_time
 
 
-def approach3_optimized(annotation_df):
+def sparse_matrix_and_indices(annotation_df):
     """Optimized approach using scipy's sparse matrix construction"""
     start_time = time.time()
     
@@ -247,7 +247,7 @@ def propagate_and_ia(terms_file, graph, matrix_propagated, matrix_indices, outpu
     # matrix2, pidx2, tidx2, time2 = approach2_term_counts(annotation_df)
     
     ## Approach 3: create csr directly from coordinates
-    matrix3, pidx3, tidx3, time3 = approach3_optimized(annotation_df)
+    matrix3, pidx3, tidx3, time3 = sparse_matrix_and_indices(annotation_df)
     
     if matrix_propagated and matrix_indices:
         print(f'Saving to file {matrix_propagated}')
@@ -309,9 +309,9 @@ def propagate_and_ia(terms_file, graph, matrix_propagated, matrix_indices, outpu
         ia_df[['term','ia']].to_csv(output_tsv, header=None, sep='\t', index=False)
 
 
-def parse_args():
+def parse_args(args):
     parser = argparse.ArgumentParser(description='Propagate and Compute Information Accretion of GO annotations')
-    parser.add_argument('--terms', '-a', required=True, 
+    parser.add_argument('--terms', '-t', required=True, 
                         help='Path to annotation file')
     
     parser.add_argument('--graph', '-g', default=None, 
@@ -326,7 +326,7 @@ def parse_args():
     parser.add_argument('--output_tsv', '-ot', default=None, 
                         help='Path to save computed IA for each term in the GO. If empty, will be saved to ./IA.txt')  
     
-    return parser.parse_args()
+    return parser.parse_args(args)
 
     
 def main():    

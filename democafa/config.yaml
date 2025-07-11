@@ -1,22 +1,15 @@
 versions:
-    UniProt_version: "2023_05"
-    UniProt_sprot_file: "https://ftp.ebi.ac.uk/pub/databases/uniprot/previous_releases/release-2023_05/knowledgebase/uniprot_sprot-only2023_05.tar.gz"
-    UniProt_GOA_version: "2023-12-08"
-    UniProt_GOA_file: "https://ftp.ebi.ac.uk/pub/databases/GO/goa/old/HUMAN/goa_human.gaf.220.gz"
-    OBO: "https://release.geneontology.org/2023-11-15/ontology/go-basic.obo"
     prott5_model: "/work/idoerg/ahphan/.cache/huggingface/"
-    OBO_t0: "https://release.geneontology.org/2024-01-17/ontology/go-basic.obo"
-    OBO_t1: "https://release.geneontology.org/2024-06-17/ontology/go-basic.obo"
-    swissprot: "https://ftp.ebi.ac.uk/pub/databases/uniprot/previous_releases/release-2022_05/knowledgebase/uniprot_sprot-only2022_05.tar.gz"
-    uniprot_sprot.gz: "https://ftp.ebi.ac.uk/pub/databases/uniprot/previous_releases/release-2022_05/knowledgebase/uniprot_sprot-only2022_05.tar.gz"
-    uniprot_goa.gz: "https://ftp.ebi.ac.uk/pub/databases/GO/goa/old/UNIPROT/goa_uniprot_all.gaf.213.gz"
-    uniprot_goa_date: "2023-02-02"
+    trembl_version: "2022_05"
+    swissprot_date: "2023-02-02"
+    swissprot.tar.gz: "https://ftp.ebi.ac.uk/pub/databases/uniprot/previous_releases/release-2022_05/knowledgebase/uniprot_sprot-only2022_05.tar.gz"
+    uniprot_goa.gaf.gz.: "https://ftp.ebi.ac.uk/pub/databases/GO/goa/old/UNIPROT/goa_uniprot_all.gaf.225.gz"
     go-basic.obo: "https://release.geneontology.org/2023-01-01/ontology/go-basic.obo"
-    t0_uniprot_goa.gz: "https://ftp.ebi.ac.uk/pub/databases/GO/goa/old/UNIPROT/goa_uniprot_all.gaf.216.gz"
-    t0_uniprot_goa_date: "2023-07-12"
+    t0_swissprot_date: "2023-07-12"
+    t0_swissprot.tar.gz: "https://ftp.ebi.ac.uk/pub/databases/uniprot/previous_releases/release-2023_03/knowledgebase/uniprot_sprot-only2023_03.tar.gz"
     t0_go-basic.obo: "https://release.geneontology.org/2023-07-27/ontology/go-basic.obo"
-    t1_uniprot_goa.gz: "https://ftp.ebi.ac.uk/pub/databases/GO/goa/old/UNIPROT/goa_uniprot_all.gaf.224.gz"
-    t1_uniprot_goa_date: "2024-12-21"
+    t1_swissprot_date: "2024-12-21"
+    t1_swissprot.tar.gz: "https://ftp.ebi.ac.uk/pub/databases/uniprot/previous_releases/release-2024_05/knowledgebase/uniprot_sprot-only2024_05.tar.gz"
     t1_go-basic.obo: "https://release.geneontology.org/2024-11-03/ontology/go-basic.obo"
     
 go_codes:
@@ -28,13 +21,14 @@ go_codes:
     ELECTRONIC: ["IEA"]
     
 raw_file_paths:
-    uniprot_sprot: "raw/uniprot_sprot.fasta.gz"
-    uniprot_goa: "raw/goa_human.gaf.220.gz"
+    swissprot_fasta: "raw/uniprot_sprot.fasta.gz"
+    swissprot_dat: "raw/uniprot_sprot.dat.gz"
+    uniprot_goa: "raw/goa_uniprot_all.gaf.gz"
     obo: "raw/go-basic.obo"
-    t0_uniprot_goa: "raw/goa_human.gaf.221.gz"
+    t0_swissprot_dat: "raw/t0_uniprot_sprot.dat.gz"
     t0_obo: "raw/t0_go-basic.obo" 
-    t1_uniprot_goa: "raw/goa_human.gaf.224.gz"
-    t1_obo: "raw/t1_go-basic.obo" # TODO: check which obo version the t1 uses
+    t1_swissprot_dat: "raw/t1_uniprot_sprot.dat.gz"
+    t1_obo: "raw/t1_go-basic.obo"
     
 processed_paths:
     train_terms: "processed/train_terms.tsv"
@@ -67,3 +61,14 @@ external_tools:
     blast: "utils/run_blast.sh"
     prott5: "utils/run_prott5.sh"
     
+archives:
+    OBO_t0: "https://release.geneontology.org/2024-01-17/ontology/go-basic.obo"
+    OBO_t1: "https://release.geneontology.org/2024-06-17/ontology/go-basic.obo"
+    UniProt_sprot_file: "https://ftp.ebi.ac.uk/pub/databases/uniprot/previous_releases/release-2023_05/knowledgebase/uniprot_sprot-only2023_05.tar.gz"
+    UniProt_GOA_version: "2023-12-08"
+    UniProt_GOA_file: "https://ftp.ebi.ac.uk/pub/databases/GO/goa/old/HUMAN/goa_human.gaf.220.gz"
+    uniprot_goa.gz: "https://ftp.ebi.ac.uk/pub/databases/GO/goa/old/UNIPROT/goa_uniprot_all.gaf.213.gz"
+    t0_uniprot_goa.gz: "https://ftp.ebi.ac.uk/pub/databases/GO/goa/old/UNIPROT/goa_uniprot_all.gaf.216.gz"
+    t1_uniprot_goa.gz: "https://ftp.ebi.ac.uk/pub/databases/GO/goa/old/UNIPROT/goa_uniprot_all.gaf.224.gz"
+    OBO: "https://release.geneontology.org/2023-11-15/ontology/go-basic.obo"
+    uniprot_goa: "raw/goa_human.gaf.220.gz"

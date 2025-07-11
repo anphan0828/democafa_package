@@ -71,8 +71,8 @@ def process_uniprot_fasta(input_fasta, input_terms, output_taxonomy, output_fast
 
 def parse_inputs(argv):
     parser = argparse.ArgumentParser(
-        description='Retrieve terms annotated to UniProtKB proteins from GOA file and save to TSV file')
-    
+        description='Retrieve sequences from UniProt FASTA file and fetch TrEMBL sequences from UniProt')
+
     parser.add_argument('--input', '-i', required=True,
                         help='Path to sprot fasta file (can be gzipped)')
     parser.add_argument('--terms', '-t', required=True, 
@@ -84,6 +84,9 @@ def parse_inputs(argv):
     parser.add_argument('--seq_limit', '-s', required=False,
                         help='Number of sequences to process (for testing purposes)')
     return parser.parse_args(argv)
+
+    # python3 -m democafa.datacollection.retrieve_sequences --input data/raw/uniprot_sprot.fasta.gz --terms data/processed/train_terms.tsv 
+    # -ot data/processed/train_taxonomy.tsv --out_fasta data/processed/train_sequences.fasta
 
 def main():
     args = parse_inputs(sys.argv[1:])
