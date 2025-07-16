@@ -88,7 +88,7 @@ def read_fasta_proteins(fasta_file: str, taxon):
                 
             # species_match = species_pattern.search(record.description)
             # species_name = species_match.group(1) if species_match else "N/A"
-            if tax_id in selected_taxon: 
+            if selected_taxon is None or tax_id in selected_taxon:
                 seq_count += 1
                 fasta_proteins[entry_id] = [str(record.id), str(record.description), str(record.seq), tax_id]
             # if species_name != "N/A":
@@ -162,6 +162,7 @@ def write_fasta(fasta_proteins, trembl_sequences, output_file, uniprot_api_versi
         for protein_id, (header, sequence) in trembl_sequences.items():
             seq_record = SeqRecord(Seq(sequence), id=header, description="")
             SeqIO.write(seq_record, fasta_out, "fasta")
+    print(f"Total sequences in test superset: {len(fasta_proteins) + len(trembl_sequences)}")
     # print(f"Appending {len(trembl_proteins)} TrEMBL proteins to {output_file}...")
     # if uniprot_api_version is None:
     #     for protein_id in trembl_proteins:
@@ -383,8 +384,11 @@ def create_test_set(terms_file, sequences_gzfile, out_fasta, in_taxonomy, train_
     trembl_proteins = list(all_proteins - set(fasta_proteins.keys()))
     print(f"Found {len(trembl_proteins)} TrEMBL proteins with missing aspects.")
     
-    print(f"Batch downloading {len(trembl_proteins)} TrEMBL proteins...")
-    trembl_sequences = batch_download_trembl_sequences_post(trembl_proteins)       
+    if trembl_proteins:
+        print(f"Batch downloading {len(trembl_proteins)} TrEMBL proteins...")
+        trembl_sequences = batch_download_trembl_sequences_post(trembl_proteins)       
+    else:
+        trembl_sequences = {}
     
     # Create training sequences and taxonomy files
     create_train_sequences(
@@ -420,7 +424,7 @@ def parse_inputs(args):
                         help='Include all proteins in the test superset')
     parser.add_argument('--uniprot_api', '-u', required=False,
                         help='UniProt API version to retrieve TrEMBL sequences')
-    parser.add_argument('--in_taxonomy', required=False, default='9606')
+    parser.add_argument('--in_taxonomy', required=False, default=None)
     return parser.parse_args(args)
 
     # python3 -m democafa.datacollection.create_test_set --terms data/processed/train_terms.tsv -f data/raw/uniprot_sprot.fasta.gz 

@@ -12,6 +12,9 @@ def parse_args(args):
     parser.add_argument('--graph', '-g', default=None, 
                         help='Path to OBO ontology graph file if local. If empty (default) current OBO structure at run-time will be downloaded from http://purl.obolibrary.org/obo/go/go-basic.obo')
     
+    parser.add_argument('--tsv_propagated', '-tp', default=None, 
+                        help='Path to save propagated term counts in 3-column TSV format.')
+    
     parser.add_argument('--matrix_propagated', '-mp', default=None, 
                         help='Path to save propagated term counts')
     
@@ -29,6 +32,7 @@ def main():
     propagate_and_ia(
         terms_file = args.terms,
         graph = args.graph,
+        tsv_propagated = args.tsv_propagated,
         matrix_propagated = args.matrix_propagated,
         matrix_indices = args.matrix_indices,
         output_tsv = args.output_tsv

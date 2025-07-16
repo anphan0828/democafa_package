@@ -3,13 +3,15 @@ versions:
     trembl_version: "2022_05"
     swissprot_date: "2023-02-02"
     swissprot.tar.gz: "https://ftp.ebi.ac.uk/pub/databases/uniprot/previous_releases/release-2022_05/knowledgebase/uniprot_sprot-only2022_05.tar.gz"
-    uniprot_goa.gaf.gz.: "https://ftp.ebi.ac.uk/pub/databases/GO/goa/old/UNIPROT/goa_uniprot_all.gaf.225.gz"
+    uniprot_goa.gaf.gz.: "https://ftp.ebi.ac.uk/pub/databases/GO/goa/old/UNIPROT/goa_uniprot_all.gaf.213.gz"
     go-basic.obo: "https://release.geneontology.org/2023-01-01/ontology/go-basic.obo"
     t0_swissprot_date: "2023-07-12"
     t0_swissprot.tar.gz: "https://ftp.ebi.ac.uk/pub/databases/uniprot/previous_releases/release-2023_03/knowledgebase/uniprot_sprot-only2023_03.tar.gz"
+    t0_uniprot_goa.gaf.gz.: "https://ftp.ebi.ac.uk/pub/databases/GO/goa/old/UNIPROT/goa_uniprot_all.gaf.216.gz"
     t0_go-basic.obo: "https://release.geneontology.org/2023-07-27/ontology/go-basic.obo"
     t1_swissprot_date: "2024-12-21"
     t1_swissprot.tar.gz: "https://ftp.ebi.ac.uk/pub/databases/uniprot/previous_releases/release-2024_05/knowledgebase/uniprot_sprot-only2024_05.tar.gz"
+    t1_uniprot_goa.gaf.gz.: "https://ftp.ebi.ac.uk/pub/databases/GO/goa/old/UNIPROT/goa_uniprot_all.gaf.224.gz"    
     t1_go-basic.obo: "https://release.geneontology.org/2024-11-03/ontology/go-basic.obo"
     
 go_codes:

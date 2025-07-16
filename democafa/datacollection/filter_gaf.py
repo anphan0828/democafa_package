@@ -32,7 +32,7 @@ def process_chunk_file(chunk_file, taxon, entries):
         for rec in GOA.gafiterator(f):
             processed_count += 1
             if entries is not None:
-                if rec['DB_Object_ID'][0] not in entries:
+                if rec['DB_Object_ID'] not in entries:
                     continue
             if taxon is not None:
                 if rec['Taxon_ID'][0] not in taxon:
@@ -105,7 +105,7 @@ def filter_gaf(file_path, taxon, entries, output, use_mp=True, num_processes=Non
         with open_func(output, mode_out) as out_handle:
             for rec in GOA.gafiterator(handle):
                 if entries is not None:
-                    if rec['DB_Object_ID'][0] not in entries:
+                    if rec['DB_Object_ID'] not in entries:
                         continue
                 if taxon is not None:
                     if rec['Taxon_ID'][0] not in taxon:
@@ -226,7 +226,7 @@ def parse_inputs(argv):
     
     return args
 
-    
+
 def main():
     args = parse_inputs(sys.argv[1:])
     
@@ -247,7 +247,6 @@ def main():
     
     # python3 -m democafa.datacollection.filter_taxonomy -a data/raw/goa_uniprot_all.gaf.216.gz -t data/raw/testsuperset-taxon-list.tsv -o data/processed/cafa5/goa_uniprot_filtered_mp.gaf.216.gz
     # python3 -m democafa.datacollection.filter_taxonomy -a data/raw/goa_uniprot_all.gaf.224.gz -t data/raw/testsuperset-taxon-list.tsv -o data/processed/cafa5/goa_uniprot_filtered_mp.gaf.224.gz
-    # python3 -m democafa.datacollection.filter_taxonomy -a data/raw/goa_uniprot_all.gaf.226.gz -q data/raw/uniprot_sprot.fasta.gz -o data/processed/cafa5/goa_uniprot_filtered_mp.gaf.226.gz
-    # TODO: test this script with the new filtering and logging setup
+    # python3 -m democafa.datacollection.filter_gaf -a data/raw/goa_uniprot_all.gaf.226.gz -q data/raw/uniprot_sprot.fasta.gz -o data/processed/cafa6/goa_uniprot_filtered_mp.gaf.226.gz
 if __name__ == "__main__":
     main()

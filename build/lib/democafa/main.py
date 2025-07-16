@@ -18,6 +18,7 @@ def main():
     # 0. Load configuration
     DATA_DIR = os.environ.get('DATA_DIR', 'data')
     # 1. Collecting data for release
+    # TODO: add filter taxonomy before retrieving terms
     if not os.path.exists(PROCESSED_PATHS['train_terms']):
         wrapper_retrieve_terms(
             annot_file=RAW_FILE_PATHS['swissprot_dat'],
@@ -30,16 +31,16 @@ def main():
     else:
         print(f"{PROCESSED_PATHS['train_terms']} already exists, moving to sequences retrieval")
     
-    if not os.path.exists(PROCESSED_PATHS['train_sequences']): 
-        process_uniprot_fasta(
-            input_fasta = RAW_FILE_PATHS['swissprot_fasta'],
-            input_terms = PROCESSED_PATHS['train_terms'], # has to match output_tsv from wrapper_retrieve_terms
-            output_taxonomy = PROCESSED_PATHS['train_taxonomy'],
-            output_fasta = PROCESSED_PATHS['train_sequences'], # only annotated proteins 
-            seq_limit=None
-        )
-    else:
-        print(f"{PROCESSED_PATHS['train_sequences']} already exists, moving to test set creation")
+    # if not os.path.exists(PROCESSED_PATHS['train_sequences']): 
+    #     process_uniprot_fasta(
+    #         input_fasta = RAW_FILE_PATHS['swissprot_fasta'],
+    #         input_terms = PROCESSED_PATHS['train_terms'], # has to match output_tsv from wrapper_retrieve_terms
+    #         output_taxonomy = PROCESSED_PATHS['train_taxonomy'],
+    #         output_fasta = PROCESSED_PATHS['train_sequences'], # only annotated proteins 
+    #         seq_limit=None
+    #     )
+    # else:
+    #     print(f"{PROCESSED_PATHS['train_sequences']} already exists, moving to test set creation")
     
     if not os.path.exists(PROCESSED_PATHS['test_sequences_all']):
         create_test_set(
