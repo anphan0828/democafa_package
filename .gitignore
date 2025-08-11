@@ -1,3 +1,4 @@
 data/
 00notes
 *.pyc
+*.log

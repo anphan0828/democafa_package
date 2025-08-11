@@ -1,24 +1,22 @@
 #!/usr/bin/env python3
-"""Filter a GAF file by taxonomy, optinally using multiprocessing."""
+"""Filter a GAF file by taxonomy or entries, optinally using multiprocessing."""
 
 import os
 import sys
 import argparse
 import gzip
 import logging
-import obonet
+from datetime import datetime
 import pandas as pd
-import networkx as nx
 import numpy as np
 from Bio.UniProt import GOA
 from Bio import SwissProt as sp
 from Bio import SeqIO
-from democafa.utils.ontology import clean_ontology_edges, fetch_aspect, propagate_terms, filter_terms_given_obo
-from democafa.config import GO_CODES
 
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
+    filename=datetime.now().strftime('filter_gaf_%Y%m%d_%H%M%S.log'),
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     datefmt='%Y-%m-%d %H:%M:%S'
 )
@@ -100,6 +98,9 @@ def filter_gaf(file_path, taxon, entries, output, use_mp=True, num_processes=Non
     handle = open_func(file_path, mode)
     mode_out = 'wt' if output.endswith('.gz') else 'w'
     
+    if not os.path.exists(os.path.dirname(output)):
+        os.makedirs(os.path.dirname(output))
+        
     if not use_mp: 
         logger.info("Processing file without multiprocessing")
         with open_func(output, mode_out) as out_handle:
@@ -206,7 +207,7 @@ def filter_gaf(file_path, taxon, entries, output, use_mp=True, num_processes=Non
 
 def parse_inputs(argv):
     parser = argparse.ArgumentParser(
-        description='Filter a GAF file and write a new GAF gzipped file with selected taxon')
+        description='Filter a GAF file by taxonomy or entries, optinally using multiprocessing. Headers are preserved.')
     
     parser.add_argument('--annot', '-a', required=True,
                         help='Path to first annotation file (can be gzipped)')
@@ -245,8 +246,6 @@ def main():
     
     logger.info("GAF filtering script completed successfully")
     
-    # python3 -m democafa.datacollection.filter_taxonomy -a data/raw/goa_uniprot_all.gaf.216.gz -t data/raw/testsuperset-taxon-list.tsv -o data/processed/cafa5/goa_uniprot_filtered_mp.gaf.216.gz
-    # python3 -m democafa.datacollection.filter_taxonomy -a data/raw/goa_uniprot_all.gaf.224.gz -t data/raw/testsuperset-taxon-list.tsv -o data/processed/cafa5/goa_uniprot_filtered_mp.gaf.224.gz
     # python3 -m democafa.datacollection.filter_gaf -a data/raw/goa_uniprot_all.gaf.226.gz -q data/raw/uniprot_sprot.fasta.gz -o data/processed/cafa6/goa_uniprot_filtered_mp.gaf.226.gz
 if __name__ == "__main__":
     main()

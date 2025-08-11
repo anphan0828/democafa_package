@@ -371,7 +371,7 @@ def create_train_sequences(proteins_with_terms, sequences_gzfile, trembl_sequenc
     print(f"- Mapping file: {train_out_taxonomy}")
 
 
-def create_test_set(terms_file, sequences_gzfile, out_fasta, in_taxonomy, train_out_fasta, train_out_taxonomy, include_all, uniprot_api_version):
+def create_test_set(terms_file, sequences_gzfile, out_fasta, train_out_fasta, train_out_taxonomy, include_all, uniprot_api_version=None, in_taxonomy=None):
     # Read GO terms data
     print("Reading GO terms data...")
     all_proteins, complete_proteins = get_proteins_with_all_aspects(terms_file)
@@ -416,7 +416,7 @@ def parse_inputs(args):
                         help='Path to gzipped SwissProt FASTA file')
     parser.add_argument('--out_fasta', '-o', required=True,
                         help='Path to test superset FASTA file')
-    parser.add_argument('--train_out_fasta', '-to', required=True,
+    parser.add_argument('--train_out_fasta', '-tf', required=True,
                         help='Path to training FASTA file with annotated proteins')
     parser.add_argument('--train_out_taxonomy', '-tt', required=True,
                         help='Path to training taxonomy mapping file')

@@ -113,8 +113,6 @@ python3 -m democafa.baselines.goa_nonexp <provide arguments as needed>
     
     
 # TODO:
-- Use uniprot_goa_all.gaf.gz instead of swissprot.dat.gz for training data
-- Test superset doesn't contain trembl sequences (and only the species in the taxon list)
 - Add example data
 - Add unit test
 - Use logging module

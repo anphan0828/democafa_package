@@ -1,19 +1,21 @@
 versions:
-    prott5_model: "/work/idoerg/ahphan/.cache/huggingface/"
-    trembl_version: "2022_05"
-    swissprot_date: "2023-02-02"
-    swissprot.tar.gz: "https://ftp.ebi.ac.uk/pub/databases/uniprot/previous_releases/release-2022_05/knowledgebase/uniprot_sprot-only2022_05.tar.gz"
-    uniprot_goa.gaf.gz.: "https://ftp.ebi.ac.uk/pub/databases/GO/goa/old/UNIPROT/goa_uniprot_all.gaf.213.gz"
-    go-basic.obo: "https://release.geneontology.org/2023-01-01/ontology/go-basic.obo"
-    t0_swissprot_date: "2023-07-12"
-    t0_swissprot.tar.gz: "https://ftp.ebi.ac.uk/pub/databases/uniprot/previous_releases/release-2023_03/knowledgebase/uniprot_sprot-only2023_03.tar.gz"
-    t0_uniprot_goa.gaf.gz.: "https://ftp.ebi.ac.uk/pub/databases/GO/goa/old/UNIPROT/goa_uniprot_all.gaf.216.gz"
-    t0_go-basic.obo: "https://release.geneontology.org/2023-07-27/ontology/go-basic.obo"
-    t1_swissprot_date: "2024-12-21"
-    t1_swissprot.tar.gz: "https://ftp.ebi.ac.uk/pub/databases/uniprot/previous_releases/release-2024_05/knowledgebase/uniprot_sprot-only2024_05.tar.gz"
-    t1_uniprot_goa.gaf.gz.: "https://ftp.ebi.ac.uk/pub/databases/GO/goa/old/UNIPROT/goa_uniprot_all.gaf.224.gz"    
-    t1_go-basic.obo: "https://release.geneontology.org/2024-11-03/ontology/go-basic.obo"
+    swissprot_date: "2025-06-18"
+    swissprot.tar.gz: "https://ftp.uniprot.org/pub/databases/uniprot/current_release/knowledgebase/complete/uniprot_sprot.fasta.gz"
+    uniprot_goa.gaf.gz.: "https://ftp.ebi.ac.uk/pub/databases/GO/goa/UNIPROT/goa_uniprot_all.gaf.gz"
+    go-basic.obo: "https://release.geneontology.org/2025-06-01/ontology/go-basic.obo"
+
+t0_versions:
+    swissprot_date: "NA"
+    swissprot.tar.gz: "NA"
+    uniprot_goa.gaf.gz.: "NA"
+    go-basic.obo: "NA"
     
+t1_versions:
+    swissprot_date: "NA"
+    swissprot.tar.gz: "NA"
+    uniprot_goa.gaf.gz.: "NA"
+    go-basic.obo: "NA"
+        
 go_codes:
     EXPERIMENTAL: ["EXP", "IDA", "IPI", "IMP", "IGI", "IEP", "HTP", "HDA", "HMP", "HGI", "HEP"]
     COMPUTATIONAL: ["ISS", "ISO", "ISA", "ISM", "IGC", "RCA"]
@@ -22,16 +24,40 @@ go_codes:
     CURATORSTATMENT: ["IC", "ND"]
     ELECTRONIC: ["IEA"]
     
-raw_file_paths:
-    swissprot_fasta: "raw/uniprot_sprot.fasta.gz"
-    swissprot_dat: "raw/uniprot_sprot.dat.gz"
-    uniprot_goa: "raw/goa_uniprot_all.gaf.gz"
-    obo: "raw/go-basic.obo"
-    t0_swissprot_dat: "raw/t0_uniprot_sprot.dat.gz"
-    t0_obo: "raw/t0_go-basic.obo" 
-    t1_swissprot_dat: "raw/t1_uniprot_sprot.dat.gz"
-    t1_obo: "raw/t1_go-basic.obo"
+other_paths:
+    prott5_model: "/work/idoerg/ahphan/.cache/huggingface/"    
     
+raw_file_paths:
+    swissprot_fasta: "raw/uniprot_sprot.fasta.2025.03.gz"
+    uniprot_goa: "raw/goa_uniprot_all.gaf.226.gz"
+    obo: "raw/go-basic-20250601.obo"
+    t0_swissprot_fasta: "NA"
+    t0_uniprot_goa: "NA"
+    t0_obo: "NA" 
+    t1_swissprot_fasta: "NA"
+    t1_uniprot_goa: "NA"
+    t1_obo: "NA"
+
+processed_file_paths:
+    goa_uniprot_filtered: "processed/goa_uniprot_filtered.gaf.gz"
+    train_terms: "processed/train_terms.tsv"
+    train_sequences: "processed/train_sequences.fasta"
+    train_taxonomy: "processed/train_taxonomy.tsv"
+    test_sequences: "processed/test_superset.fasta"
+    train_terms_propagated: "processed/train_terms_propagated.tsv"
+    t0_goa_uniprot_filtered: "processed/t0_goa_uniprot_filtered.gaf.gz"
+    t0_terms: "processed/t0_terms.tsv"
+    t1_goa_uniprot_filtered: "processed/t1_goa_uniprot_filtered.gaf.gz"
+    t1_terms: "processed/t1_terms.tsv"
+
+baseline_paths:
+    baseline_goa_nonexp: "baseline/goa_nonexp_baseline.tsv.gz"
+    baseline_naive: "baseline/naive_baseline.tsv.gz"
+    baseline_blast: "baseline/blast_baseline.tsv.gz"
+    baseline_prott5: "baseline/prott5_baseline.tsv.gz"
+    output_blast: "processed/blast_results.tsv"
+    output_prott5: "processed/prott5_results_norm.tsv"
+`
 processed_paths:
     train_terms: "processed/train_terms.tsv"
     train_sequences: "processed/train_sequences.fasta"
@@ -53,7 +79,7 @@ processed_paths:
     t0_terms: "processed/t0_terms.tsv"
     t1_terms: "processed/t1_terms.tsv"
     t1_ground_truth: "processed/t1_ground_truth.tsv"
-    
+
 release_paths:
     test_sequences: "release/test_superset.fasta"
     test_sequences_all: "release/test_superset_all.fasta"
@@ -74,3 +100,16 @@ archives:
     t1_uniprot_goa.gz: "https://ftp.ebi.ac.uk/pub/databases/GO/goa/old/UNIPROT/goa_uniprot_all.gaf.224.gz"
     OBO: "https://release.geneontology.org/2023-11-15/ontology/go-basic.obo"
     uniprot_goa: "raw/goa_human.gaf.220.gz"
+    trembl_version: "2022_05"
+    swissprot_date: "2023-02-02"
+    swissprot.tar.gz: "https://ftp.ebi.ac.uk/pub/databases/uniprot/previous_releases/release-2022_05/knowledgebase/uniprot_sprot-only2022_05.tar.gz"
+    uniprot_goa.gaf.gz.: "https://ftp.ebi.ac.uk/pub/databases/GO/goa/old/UNIPROT/goa_uniprot_all.gaf.213.gz"
+    go-basic.obo: "https://release.geneontology.org/2023-01-01/ontology/go-basic.obo"
+    t0_swissprot_date: "2023-07-12"
+    t0_swissprot.tar.gz: "https://ftp.ebi.ac.uk/pub/databases/uniprot/previous_releases/release-2023_03/knowledgebase/uniprot_sprot-only2023_03.tar.gz"
+    t0_uniprot_goa.gaf.gz.: "https://ftp.ebi.ac.uk/pub/databases/GO/goa/old/UNIPROT/goa_uniprot_all.gaf.216.gz"
+    t0_go-basic.obo: "https://release.geneontology.org/2023-07-27/ontology/go-basic.obo"
+    t1_swissprot_date: "2024-12-21"
+    t1_swissprot.tar.gz: "https://ftp.ebi.ac.uk/pub/databases/uniprot/previous_releases/release-2024_05/knowledgebase/uniprot_sprot-only2024_05.tar.gz"
+    t1_uniprot_goa.gaf.gz.: "https://ftp.ebi.ac.uk/pub/databases/GO/goa/old/UNIPROT/goa_uniprot_all.gaf.224.gz"    
+    t1_go-basic.obo: "https://release.geneontology.org/2024-11-03/ontology/go-basic.obo"

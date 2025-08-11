@@ -24,15 +24,18 @@ if config:
     RAW_FILE_PATHS = config.get('raw_file_paths', {})
     for key in RAW_FILE_PATHS:
         RAW_FILE_PATHS[key] = os.path.join(DATA_DIR, RAW_FILE_PATHS[key])
-    PROCESSED_PATHS = config.get('processed_paths', {})
-    for key in PROCESSED_PATHS:
-        PROCESSED_PATHS[key] = os.path.join(DATA_DIR, PROCESSED_PATHS[key])
+    PROCESSED_FILE_PATHS = config.get('processed_file_paths', {})
+    for key in PROCESSED_FILE_PATHS:
+        PROCESSED_FILE_PATHS[key] = os.path.join(DATA_DIR, PROCESSED_FILE_PATHS[key])
     RELEASE_PATHS = config.get('release_paths', {})
     for key in RELEASE_PATHS:
         RELEASE_PATHS[key] = os.path.join(DATA_DIR, RELEASE_PATHS[key])
     EXTERNAL_TOOLS = config.get('external_tools', {})
     for key in EXTERNAL_TOOLS:
         EXTERNAL_TOOLS[key] = os.path.join(UTILS_DIR, EXTERNAL_TOOLS[key])
+    BASELINE_PATHS = config.get('baseline_paths', {})
+    for key in BASELINE_PATHS:
+        BASELINE_PATHS[key] = os.path.join(DATA_DIR, BASELINE_PATHS[key])
 else:
     VERSIONS = {}
     GO_CODES = {}

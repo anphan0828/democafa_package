@@ -280,9 +280,9 @@ def sparse_matrix_and_indices(annotation_df):
     
     end_time = time.time()
     return S_dok, protein_idx, term_indices, end_time - start_time
-    
-    
-def propagate_and_ia(terms_file, graph, tsv_propagated, matrix_propagated, matrix_indices, output_tsv):
+
+
+def propagate_and_ia(terms_file, graph, tsv_propagated, matrix_propagated=None, matrix_indices=None, output_tsv=None):
     # load ontology graph and get three subontologies
     ontology_graph = clean_ontology_edges(obonet.read_obo(graph))
     roots = {'P': 'GO:0008150', 'C': 'GO:0005575', 'F': 'GO:0003674'}

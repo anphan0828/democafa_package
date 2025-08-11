@@ -18,6 +18,7 @@ input_file = '/work/idoerg/ahphan/democafa_package/data/raw/GO_annotations_CAFA_
 ontology_graph = '/work/idoerg/ahphan/democafa_package/data/raw/go-basic-20250601.obo'
 ontology_slim = '/work/idoerg/ahphan/robot_obo/results/go-slim-20250601.obo'
 taxon_file = '/work/idoerg/ahphan/democafa_package/data/raw/testsuperset-taxon-list.tsv'
+output_file = '/work/idoerg/ahphan/democafa_package/data/processed/cafa6/ground_truth_20250610.tsv'
 
 def process_tsv(input_file, ontology_graph, output_file):
     """
@@ -50,8 +51,21 @@ def process_tsv(input_file, ontology_graph, output_file):
     annotation_df = propagate_terms(annotation_df, subontologies) 
     print(annotation_df.describe())
     
-    # TODO: filter for new species to be added to training and test sets
-    # TODO: check how many are unreviewed
+    # TODO: Remove 3 binding terms of proteins even though they are annotated in other aspects
+    binding_terms = set(nx.descendants(subontologies['F'],'GO:0005515'))
+    binding_terms.add('GO:0005515')
+    binding_only = annotation_df[annotation_df['term'].isin(binding_terms)]
+    binding_only = binding_only.groupby(['EntryID','aspect']).size().reset_index(name='count')
+    
+    # print(f"Removed {len(annotation_df['EntryID'].unique()) - len(nonbinding_df['EntryID'].unique())} proteins with only protein-binding terms.")
+    # annotation_df = annotation_df[annotation_df['EntryID'].isin(nonbinding_df['EntryID'])]
+    # TODO: remove trembl proteins
+    
+    
+    # Save to 3-column TSV
+    annotation_df[['EntryID', 'term', 'aspect']].to_csv(output_file, sep='\t', index=False, header=True)
+    
+    # (Solved) filter for new species to be added to training and test sets: Using all SwissProt species now
     old_taxon = pd.read_csv(taxon_file, header=0, sep='\t', encoding='ISO-8859-1')
     old_taxid = [str(taxon_id) for taxon_id in set(old_taxon.iloc[:,0].tolist())]
     
@@ -63,6 +77,7 @@ def process_tsv(input_file, ontology_graph, output_file):
             'to': 'UniProtKB',
             'ids': f"{','.join(batch)}"
         }
+    review_status = dict()
     # Submit job
     response = requests.post(url, data=data)
     job_id = response.json()['jobId']
@@ -75,14 +90,15 @@ def process_tsv(input_file, ontology_graph, output_file):
             stream_url = f"https://rest.uniprot.org/idmapping/uniprotkb/results/stream/{job_id}?fields=accession%2Creviewed%2Corganism_name%2Corganism_id&format=tsv"
             tsv_response = requests.get(stream_url)
             tsv_content = tsv_response.text
-
+            
             for line in tsv_content.strip().split('\n')[1:]:
                 accession, _, reviewed, organism_name, taxid = line.split('\t')
+                review_status[accession] = reviewed
                 taxon[accession] = (organism_name, taxid)
             break
         time.sleep(1)
 
-    new_taxon = {name: id for (name, id) in taxon.values() if id not in old_taxid}
+    # new_taxon = {name: id for (name, id) in taxon.values() if id not in old_taxid}
 
     
     # Intersect with GOslim
