@@ -17,7 +17,7 @@ micromamba activate democafaenv
 cd /work/idoerg/ahphan/democafa_package
 
 echo "Running filter taxonomy"
-python3 -m democafa.datacollection.filter_taxonomy -a data/raw/goa_uniprot_all.gaf.226.gz -q data/raw/uniprot_sprot.fasta.2025.02.gz -o data/processed/cafa6/goa_uniprot_filtered_mp.gaf.226.gz
+python3 -m democafa.datacollection.filter_gaf -a data/raw/goa_uniprot_all.gaf.226.gz -q data/raw/uniprot_sprot.fasta.2025.03.gz -o data/processed/cafa6/goa_uniprot_filtered_mp.gaf.226.gz
 echo "Running retrieve terms"
 python3 -m democafa.datacollection.retrieve_terms --annot data/processed/cafa6/goa_uniprot_filtered_mp.gaf.226.gz -sgc 'Experimental,IC,TAS' -g data/raw/go-basic.obo --tsv data/processed/cafa6/train_terms.tsv 
 

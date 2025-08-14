@@ -3,7 +3,7 @@
 
 #SBATCH --time=05:00:00   # walltime limit (HH:MM:SS)
 #SBATCH --nodes=1   # number of nodes
-#SBATCH --ntasks-per-node=8   # 8 processor core(s) per node 
+#SBATCH --cpus-per-task=16 
 #SBATCH --mem=128G   # maximum memory per node
 #SBATCH --job-name="groundtruth"
 #SBATCH --mail-user=ahphan@iastate.edu   # email address
@@ -53,15 +53,16 @@ python3 -m democafa.datacollection.retrieve_terms -a "$gaf_filtered2" -sgc "Expe
 
 # Propagate terms to the root
 python3 -m democafa.datacollection.propagate_and_ia -t "data/processed/terms1.tsv" -g "$obo1" -tp "data/processed/terms1_propagated.tsv" -ot "data/processed/terms1_IA.tsv"
-python3 -m democafa.datacollection.propagate_and_ia -t "data/processed/terms2.tsv" -g "$obo2" -tp "data/processed/terms2_propagated.tsv"
+# python3 -m democafa.datacollection.propagate_and_ia -t "data/processed/terms2.tsv" -g "$obo1" -tp "data/processed/terms2_propagated.tsv" # no need to propagate
 
 # Classify ground truth based on two propagated term files
-python3 -m democafa.groundtruth.classify_ground_truth -ak "data/processed/terms1_propagated.tsv" -a2 "data/processed/terms2_propagated.tsv" -g "$obo1" -g2 "$obo2" -q "$query" -o "$output"
-# TODO: add a function in classify_ground_truth to get gain queries (in fasta format)
+python3 -m democafa.groundtruth.classify_ground_truth -ak "data/processed/terms1_propagated.tsv" -a2 "data/processed/terms2.tsv" -g "$obo1" -g2 "$obo2" -q "$query" --out_prefix "$output"
 # TODO: need train_sequences and train_taxonomy for blast predictor
-gain_query="${query/.fasta/_gain.fasta}"
+gain_query="${output/.tsv/_targets.tsv}"
+gain_query_fasta="${gain_query/.tsv/.fasta}"
 
-# Run evaluations
+python3 -m democafa.datacollection.retrieve_sequences -i "$gain_query" -f "$query" -of "$gain_query_fasta"
+# # Run evaluations
 cd /work/idoerg/ahphan/CAFA_forever
 mkdir -p current/
 mkdir -p current/predictions
@@ -72,5 +73,12 @@ singularity exec --pwd /app --bind /work/idoerg/ahphan/democafa_package/data:/ap
   --annot_file /app/data/processed/terms1_propagated.tsv --query_file "$gain_query" --graph "$obo1" \
   --train_sequences /app/data/processed/train_sequences.2025.02.fasta --train_taxonomy /app/data/processed/train_taxonomy.2025.02.tsv \
   --output_baseline /app/output/blast_predictions.tsv.gz
-singularity exec --pwd /app   --bind /work/idoerg/ahphan/democafa_package/data:/app/data   --bind /work/idoerg/ahphan/CAFA-forever/AprJun/predictions:/app/output   test_naive_latest.sif   python3 naive.py --annot_file /app/data/processed/cafa6/goa_uniprot_filtered_mp.gaf.225.gz --query_file /work/idoerg/ahphan/CAFA-forever/AprJun/targets2.txt --graph /app/data/raw/go-basic-20250316.obo --output_baseline /app/output/naive_predictions.tsv.gz 
-singularity exec --pwd /app   --bind /work/idoerg/ahphan/democafa_package/data:/app/data   --bind /work/idoerg/ahphan/CAFA-forever/AprJun/predictions:/app/output   test_goa_nonexp_latest.sif   python3 goa_nonexp.py --annot_file /app/data/processed/cafa6/goa_uniprot_filtered_mp.gaf.225.gz --query_file /work/idoerg/ahphan/CAFA-forever/AprJun/targets2.txt --graph /app/data/raw/go-basic-20250316.obo --output_baseline /app/output/goa_nonexp_predictions.tsv.gz --selected_go 'Computational,Phylogenetical,Electronic,ND,NAS'
+singularity exec --pwd /app --bind /work/idoerg/ahphan/democafa_package/data:/app/data --bind /work/idoerg/ahphan/CAFA-forever/current/predictions:/app/output \
+  test_naive_latest.sif python3 naive.py \
+  --annot_file /app/data/processed/terms1_propagated.tsv --query_file "$gain_query" --graph "$obo1" \
+  --output_baseline /app/output/naive_predictions.tsv.gz 
+singularity exec --pwd /app --bind /work/idoerg/ahphan/democafa_package/data:/app/data --bind /work/idoerg/ahphan/CAFA-forever/current/predictions:/app/output \
+  test_goa_nonexp_latest.sif python3 goa_nonexp.py \
+  --annot_file /app/data/processed/terms1_propagated.tsv --query_file "$gain_query" --graph "$obo1" \
+  --selected_go 'Computational,Phylogenetical,Electronic,ND,NAS' \
+  --output_baseline /app/output/goa_nonexp_predictions.tsv.gz 

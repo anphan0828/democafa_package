@@ -57,7 +57,7 @@ baseline_paths:
     baseline_prott5: "baseline/prott5_baseline.tsv.gz"
     output_blast: "processed/blast_results.tsv"
     output_prott5: "processed/prott5_results_norm.tsv"
-`
+
 processed_paths:
     train_terms: "processed/train_terms.tsv"
     train_sequences: "processed/train_sequences.fasta"

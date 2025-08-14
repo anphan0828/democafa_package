@@ -53,13 +53,21 @@ def wrapper_ground_truth(annot_known, annot2, query_file, graph, graph2, out_pre
     dfk = dfk[dfk['term'].isin(toi)]
     df2 = df2[df2['term'].isin(toi)]
     
+    
     # Compare dfk and df2 to find proteins that gained new terms
     dfk_df2_toi = dfk.merge(df2, on=df2.columns.to_list(), how='outer', indicator=True)
     print(dfk_df2_toi['_merge'].value_counts())
     df2_gain = dfk_df2_toi.loc[dfk_df2_toi._merge=='right_only',dfk_df2_toi.columns!='_merge'] # new terms
+    print(f"Number of terms gained in each aspect: {df2_gain['aspect'].value_counts()}")
+    
     p_asp_pairs = df2_gain[['EntryID', 'aspect']].drop_duplicates().reset_index(drop=True)
     print(f"Number of proteins gaining terms: {len(df2_gain['EntryID'].unique())}, with {len(p_asp_pairs)} protein-aspect pairs")
     
+    # Remove already existing annotations in df2 (biocuration redundancy)
+    redundant_proteins = set.difference(set(df2['EntryID']), set(df2_gain['EntryID']))
+    if len(redundant_proteins) > 0:
+        print(f"There were {len(redundant_proteins)} proteins whose new annotations already existed: {redundant_proteins}")
+        
     # NK: proteins in query_ids that are in df2 but not in dfk  
     print("Processing No Knowledge...")
     NK = set.intersection(set.difference(set(df2['EntryID']), set(dfk['EntryID'])), set(query_ids))
@@ -112,6 +120,13 @@ def wrapper_ground_truth(annot_known, annot2, query_file, graph, graph2, out_pre
     print(f"Number of proteins in NK: {len(NK)}, with {len(NK_df)} terms")
     print(f"Number of proteins in LK: {len(LK_dict)}, with {len(LK_df)} terms")
     print(f"Number of proteins in PK: {len(PK_dict)}, with {len(PK_df)} new child terms gained")
+    
+    all_targets = set.union(set(NK), set(LK_dict.keys()), set(PK_dict.keys()))
+    print(f"Total number of target proteins: {len(all_targets)}")
+    with open(f'{out_prefix.replace(".tsv","_targets.tsv")}', 'w') as f:
+        for target in all_targets:
+            f.write(f"{target}\n")
+            
 
 
 def parse_inputs(argv):

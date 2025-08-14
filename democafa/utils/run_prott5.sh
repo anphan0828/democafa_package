@@ -40,19 +40,21 @@ out_evalset="data/processed/cafa6/prott5/evalset_embeddings.h5"
 out_dbset="data/processed/cafa6/prott5/blast_db_embeddings.h5"
 
 echo "Running prott5 embeddings for evaluation set"
-python democafa/utils/prott5-baseline/prott5_embedder.py --input $query --output $out_evalset --per_protein 1 --model $model
+python3 democafa/utils/prott5-baseline/prott5_embedder.py --input $query --output $out_evalset --per_protein 1 --model $model
 
 echo "Running prott5 embeddings for database set"
-python democafa/utils/prott5-baseline/prott5_embedder.py --input $database --output $out_dbset --per_protein 1 --model $model
+python3 democafa/utils/prott5-baseline/prott5_embedder.py --input $database --output $out_dbset --per_protein 1 --model $model
 
 echo "Processing embeddings to $output"
-python democafa/utils/prott5-baseline/process_embeddings_gpu.py $out_evalset $out_dbset $output
+python3 democafa/utils/prott5-baseline/process_embeddings_gpu.py $out_evalset $out_dbset $output
 
-python democafa/utils/prott5-baseline/normalize_embeddings.py $output
+python3 democafa/utils/prott5-baseline/normalize_embeddings.py $output
 
-# replace .tsv with _norm.tsv from the output file name
-output_norm=${output/.tsv/_norm.tsv}
-# Format clearning
-sed -ri 's/sp\|//g' $output_norm
-sed -ri 's/tr\|//g' $output_norm
-sed -ri 's/\|[^\t]*\t/\t/g' $output_norm
+# output will be provided filename with _norm.tsv suffix
+
+# # replace .tsv with _norm.tsv from the output file name
+# output_norm=${output/.tsv/_norm.tsv}
+# # Format clearning
+# sed -ri 's/sp\|//g' $output_norm
+# sed -ri 's/tr\|//g' $output_norm
+# sed -ri 's/\|[^\t]*\t/\t/g' $output_norm

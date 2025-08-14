@@ -17,10 +17,30 @@ import requests
 import argparse
 import re
 import gzip
+import logging
+from datetime import datetime
 import pandas as pd
 from Bio import SeqIO
 from Bio.Seq import Seq
 from Bio.SeqRecord import SeqRecord
+
+# Create a specific logger for this module (not the root logger)
+logger = logging.getLogger('create_test_set')
+logger.setLevel(logging.INFO)
+
+# Prevent messages from propagating to the root logger (so multiple loggers can coexist)
+logger.propagate = False
+
+# Create file handler
+log_filename = datetime.now().strftime('create_test_set_%Y%m%d_%H%M%S.log')
+file_handler = logging.FileHandler(log_filename)
+file_handler.setLevel(logging.INFO)
+formatter = logging.Formatter(
+    '%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S'
+)
+file_handler.setFormatter(formatter)
+logger.addHandler(file_handler)
 
 
 def get_proteins_with_all_aspects(terms_file):
@@ -67,7 +87,7 @@ def read_fasta_proteins(fasta_file: str, taxon):
     elif isinstance(taxon, str) and os.path.exists(taxon):
         taxon_file = pd.read_csv(taxon, header=0, sep='\t', encoding='ISO-8859-1')
         selected_taxon = [str(taxon_id) for taxon_id in set(taxon_file.iloc[:,0].tolist())]
-    print(f"Selected taxon: {selected_taxon}")
+    logger.info(f"Selected taxon: {selected_taxon}")
     
     tax_pattern = re.compile(r"OX=(\d+)")
     species_pattern = re.compile(r"OS=([^O]+)")
@@ -93,7 +113,7 @@ def read_fasta_proteins(fasta_file: str, taxon):
                 fasta_proteins[entry_id] = [str(record.id), str(record.description), str(record.seq), tax_id]
             # if species_name != "N/A":
                 # species[species_name] = tax_id
-    print(f"Total sequences processed: {seq_count}")
+    logger.info(f"Total sequences processed: {seq_count}")
             
     return fasta_proteins
 
@@ -162,7 +182,7 @@ def write_fasta(fasta_proteins, trembl_sequences, output_file, uniprot_api_versi
         for protein_id, (header, sequence) in trembl_sequences.items():
             seq_record = SeqRecord(Seq(sequence), id=header, description="")
             SeqIO.write(seq_record, fasta_out, "fasta")
-    print(f"Total sequences in test superset: {len(fasta_proteins) + len(trembl_sequences)}")
+    logger.info(f"Total sequences in test superset: {len(fasta_proteins) + len(trembl_sequences)}")
     # print(f"Appending {len(trembl_proteins)} TrEMBL proteins to {output_file}...")
     # if uniprot_api_version is None:
     #     for protein_id in trembl_proteins:
@@ -324,6 +344,7 @@ def create_train_sequences(proteins_with_terms, sequences_gzfile, trembl_sequenc
     # Counter for progress tracking
     seq_count = 0
     trembl_seq_count = 0
+    all_taxid = set()
     
     # Process gzipped file and write both outputs simultaneously
     with gzip.open(sequences_gzfile, "rt") as gz_file, \
@@ -341,13 +362,15 @@ def create_train_sequences(proteins_with_terms, sequences_gzfile, trembl_sequenc
             # Extract taxonomy ID using regex
             tax_match = tax_pattern.search(record.description)
             tax_id = tax_match.group(1) if tax_match else "N/A"
+            if tax_id != "N/A":
+                all_taxid.add(tax_id)
             mapping_out.write(f"{entry_id}\t{tax_id}\n")
             
             SeqIO.write(record, fasta_out, "fasta")
             
             # Print progress every 10 sequences
             if seq_count % 10000 == 0:
-                print(f"Processed {seq_count} sequences in SwissProt...")
+                logger.debug(f"Processed {seq_count} sequences in SwissProt...")
     
         # Process TrEMBL sequences
         if trembl_sequences:
@@ -362,31 +385,28 @@ def create_train_sequences(proteins_with_terms, sequences_gzfile, trembl_sequenc
                 SeqIO.write(seq_record, fasta_out, "fasta")
             # Print progress every 10 sequences
             if trembl_seq_count % 10000 == 0:
-                print(f"Processed {trembl_seq_count} sequences in TrEMBL...")
-                
-    print(f"Total SwissProt sequences in training data: {seq_count}")
-    print(f"Total sequences in training data: {trembl_seq_count + seq_count}")
-    print(f"Output files created:")
-    print(f"- FASTA file: {train_out_fasta}")
-    print(f"- Mapping file: {train_out_taxonomy}")
+                logger.debug(f"Processed {trembl_seq_count} sequences in TrEMBL...")
 
+    logger.info(f"Total SwissProt sequences in training data: {seq_count}")
+    logger.info(f"Total sequences in training data: {trembl_seq_count + seq_count} proteins in {len(all_taxid)} taxa")
+    
 
 def create_test_set(terms_file, sequences_gzfile, out_fasta, train_out_fasta, train_out_taxonomy, include_all, uniprot_api_version=None, in_taxonomy=None):
     # Read GO terms data
-    print("Reading GO terms data...")
+    logger.info("Reading GO terms data...")
     all_proteins, complete_proteins = get_proteins_with_all_aspects(terms_file)
  
     # Read FASTA file
-    print("Reading FASTA sequences...")
+    logger.info("Reading FASTA sequences...")
     fasta_proteins = read_fasta_proteins(sequences_gzfile, in_taxonomy)
     
     # Get TrEMBL proteins with missing aspects
     trembl_proteins = list(all_proteins - set(fasta_proteins.keys()))
-    print(f"Found {len(trembl_proteins)} TrEMBL proteins with missing aspects.")
+    logger.info(f"Found {len(trembl_proteins)} TrEMBL proteins with missing aspects.")
     
     if trembl_proteins:
-        print(f"Batch downloading {len(trembl_proteins)} TrEMBL proteins...")
-        trembl_sequences = batch_download_trembl_sequences_post(trembl_proteins)       
+        logger.info(f"Batch downloading {len(trembl_proteins)} TrEMBL proteins...")
+        trembl_sequences = batch_download_trembl_sequences_post(trembl_proteins)
     else:
         trembl_sequences = {}
     
@@ -425,13 +445,26 @@ def parse_inputs(args):
     parser.add_argument('--uniprot_api', '-u', required=False,
                         help='UniProt API version to retrieve TrEMBL sequences')
     parser.add_argument('--in_taxonomy', required=False, default=None)
-    return parser.parse_args(args)
+    parser.add_argument('--log-level', choices=['DEBUG', 'INFO', 'WARNING', 'ERROR'], 
+                        default='INFO', help='Set the logging level (default: INFO)')
+ 
+    args = parser.parse_args(args)
+    
+    # Configure logging level based on argument
+    logger.setLevel(getattr(logging, args.log_level))
+    for handler in logger.handlers:
+        handler.setLevel(getattr(logging, args.log_level))
+
+    return args
 
     # python3 -m democafa.datacollection.create_test_set --terms data/processed/train_terms.tsv -f data/raw/uniprot_sprot.fasta.gz 
     # -o data/processed/test_superset_all.fasta --include_all
 
 def main():
     args = parse_inputs(sys.argv[1:])
+    
+    logger.info(f"Arguments: {vars(args)}")
+    
     create_test_set(
         terms_file=args.terms,
         sequences_gzfile=args.fasta_gz,

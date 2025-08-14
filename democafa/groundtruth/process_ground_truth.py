@@ -2,6 +2,11 @@
 
 import sys
 import argparse
+import os
+import gzip
+import pandas as pd
+import re
+from Bio import SeqIO
 import requests
 import obonet
 import numpy as np
@@ -13,14 +18,17 @@ from collections import Counter
 from democafa.utils.ontology import add_aspect_column, clean_ontology_edges, fetch_aspect, propagate_terms
 from democafa.datacollection.retrieve_terms import filter_evidence_codes
 from democafa.config import GO_CODES
+from Bio import Entrez
+Entrez.email = "ahphan@iastate.edu"
 
-input_file = '/work/idoerg/ahphan/democafa_package/data/raw/GO_annotations_CAFA_20230610.tsv'
-ontology_graph = '/work/idoerg/ahphan/democafa_package/data/raw/go-basic-20250601.obo'
-ontology_slim = '/work/idoerg/ahphan/robot_obo/results/go-slim-20250601.obo'
-taxon_file = '/work/idoerg/ahphan/democafa_package/data/raw/testsuperset-taxon-list.tsv'
-output_file = '/work/idoerg/ahphan/democafa_package/data/processed/cafa6/ground_truth_20250610.tsv'
+input_file = '/work/idoerg/ahphan/democafa_package/data/cafa6/raw/GO_annotations_CAFA_20230610.tsv'
+ontology_graph = '/work/idoerg/ahphan/democafa_package/data/cafa6/raw/go-basic-20250601.obo'
+# ontology_slim = '/work/idoerg/ahphan/robot_obo/results/go-slim-20250601.obo'
+taxon_path = '/work/idoerg/ahphan/democafa_package/data/raw/testsuperset-taxon-list.tsv'
+output_file = '/work/idoerg/ahphan/democafa_package/data/cafa6/processed/terms_20250610.tsv'
+swissprot_fasta = '/work/idoerg/ahphan/democafa_package/data/cafa6/raw/uniprot_sprot.fasta.2025.03.gz'
 
-def process_tsv(input_file, ontology_graph, output_file):
+def process_tsv(input_file, ontology_graph, output_file, testsuperset):
     """
     Process a TSV file to add an 'aspect' column based on GO terms.
     
@@ -48,28 +56,42 @@ def process_tsv(input_file, ontology_graph, output_file):
         print(f"These terms will not appear in terms file.")
         annotation_df = annotation_df[~annotation_df['term'].isin(obsolete_terms)]
     
-    annotation_df = propagate_terms(annotation_df, subontologies) 
+    # Union-ize isoform annotations
+    annotation_df['EntryID'] = annotation_df['EntryID'].str.split('-').str[0]
+    annotation_df = annotation_df.drop_duplicates(subset=['EntryID', 'term', 'aspect'])
+    
     print(annotation_df.describe())
     
-    # TODO: Remove 3 binding terms of proteins even though they are annotated in other aspects
+    # Remove 3 binding terms of proteins even though they are annotated in other aspects
+    # annotation_df = propagate_terms(annotation_df, subontologies) 
     binding_terms = set(nx.descendants(subontologies['F'],'GO:0005515'))
     binding_terms.add('GO:0005515')
-    binding_only = annotation_df[annotation_df['term'].isin(binding_terms)]
-    binding_only = binding_only.groupby(['EntryID','aspect']).size().reset_index(name='count')
+    no_binding = annotation_df[~annotation_df['term'].isin(binding_terms)]
+    binding_only = set.difference(set(annotation_df['EntryID']), set(no_binding['EntryID']))
+    print(f"Removed {len(binding_only)} proteins with only protein-binding terms.")
+    annotation_df = annotation_df[~annotation_df['EntryID'].isin(binding_only)]
     
-    # print(f"Removed {len(annotation_df['EntryID'].unique()) - len(nonbinding_df['EntryID'].unique())} proteins with only protein-binding terms.")
-    # annotation_df = annotation_df[annotation_df['EntryID'].isin(nonbinding_df['EntryID'])]
-    # TODO: remove trembl proteins
-    
+    # Remove TrEMBL proteins
+    fasta_proteins = read_fasta_proteins(swissprot_fasta)
+    trembl_gain_proteins = set.difference(set(annotation_df['EntryID']), set(fasta_proteins.keys()))
+    print(f"Removed {len(trembl_gain_proteins)} TrEMBL proteins: {trembl_gain_proteins}.")
+    annotation_df = annotation_df[~annotation_df['EntryID'].isin(trembl_gain_proteins)]
     
     # Save to 3-column TSV
     annotation_df[['EntryID', 'term', 'aspect']].to_csv(output_file, sep='\t', index=False, header=True)
+    print(annotation_df['aspect'].value_counts())
+    # # Intersect with GOslim
+    # ontology_slim = clean_ontology_edges(obonet.read_obo(ontology_slim))
+    # slim_df = annotation_df[(annotation_df['term'].isin(ontology_slim.nodes())) & 
+    #                         (~annotation_df['term'].isin(roots.values()))] # proteins with only roots (after slim) will be removed
+    # print(slim_df.describe())   
     
-    # (Solved) filter for new species to be added to training and test sets: Using all SwissProt species now
-    old_taxon = pd.read_csv(taxon_file, header=0, sep='\t', encoding='ISO-8859-1')
-    old_taxid = [str(taxon_id) for taxon_id in set(old_taxon.iloc[:,0].tolist())]
     
     batch = list(annotation_df['EntryID'].unique())
+    return batch
+    
+    
+def fetch_taxonomy(batch):
     url = "https://rest.uniprot.org/idmapping/run"
     taxon = dict()
     data = {
@@ -96,16 +118,88 @@ def process_tsv(input_file, ontology_graph, output_file):
                 review_status[accession] = reviewed
                 taxon[accession] = (organism_name, taxid)
             break
-        time.sleep(1)
+        time.sleep(0.5)
+    
+    return taxon
 
-    # new_taxon = {name: id for (name, id) in taxon.values() if id not in old_taxid}
 
+def read_fasta_proteins(fasta_file: str):
+    """
+    Read proteins from FASTA file using Biopython.
+    Filter for taxonomy (for demo purposes, only human proteins are considered).
     
-    # Intersect with GOslim
-    ontology_slim = clean_ontology_edges(obonet.read_obo(ontology_slim))
-    slim_df = annotation_df[(annotation_df['term'].isin(ontology_slim.nodes())) & 
-                            (~annotation_df['term'].isin(roots.values()))] # proteins with only roots (after slim) will be removed
-    print(slim_df.describe())                            
+    Args:
+        fasta_file: Path to the FASTA file
+        
+    Returns:
+        Dictionary mapping protein IDs to their sequences
+    """
+    # Read in taxon file
+    # if taxon is None:
+    #     selected_taxon = None
+    # elif taxon.isdigit(): 
+    #     # If taxon is a single ID, convert it to a list
+    #     selected_taxon = [str(taxon)]
+    # elif isinstance(taxon, str) and os.path.exists(taxon):
+    #     taxon_file = pd.read_csv(taxon, header=0, sep='\t', encoding='ISO-8859-1')
+    #     selected_taxon = [str(taxon_id) for taxon_id in set(taxon_file.iloc[:,0].tolist())]
+    
+    tax_pattern = re.compile(r"OX=(\d+)")
+    species_pattern = re.compile(r"OS=([^O]+)")
+    fasta_proteins = {}
+    missing_taxon = {}
+    # species = {}
+    
+    seq_count = 0
+    
+    # Process gzipped fasta file to get all SwissProt proteins
+    with gzip.open(fasta_file, "rt") as gz_file:
+        for record in SeqIO.parse(gz_file, 'fasta'):
+            # Extract accession (EntryID)
+            entry_id = record.id.split("|")[1] if "|" in record.id else record.id
+            
+            # Extract taxonomy ID using regex
+            tax_match = tax_pattern.search(record.description)
+            tax_id = tax_match.group(1) if tax_match else "N/A"
+                
+            # species_match = species_pattern.search(record.description)
+            # species_name = species_match.group(1) if species_match else "N/A"
+            # if selected_taxon is None or tax_id in selected_taxon:
+                # seq_count += 1
+            fasta_proteins[entry_id] = tax_id
+            # elif tax_id not in selected_taxon:
+                # missing_taxon[entry_id] = tax_id
+            # if species_name != "N/A":
+                # species[species_name] = tax_id
+    
+    return fasta_proteins
+
+# gained_entries = process_tsv(input_file, ontology_graph, output_file)
+groundtruth_df = pd.read_csv('/work/idoerg/ahphan/democafa_package/data/temp/groundtruth_targets.tsv', sep='\t', header=None)
+gained_entries = groundtruth_df.iloc[:,0].tolist()
+gained_taxon = fetch_taxonomy(gained_entries)
+gained_taxon_count = Counter(gained_taxon.values())
+
+# Comparing with 90-species set
+taxon_file =  pd.read_csv(taxon_path, header=0, sep='\t', encoding='ISO-8859-1')
+selected_taxon = [str(taxon_id) for taxon_id in set(taxon_file.iloc[:,0].tolist())]
+fasta_proteins = read_fasta_proteins('/work/idoerg/ahphan/democafa_package/data/cafa6/raw/uniprot_sprot_taxid_2759.fasta.gz')
+# len(set.difference(set(selected_taxon), set(fasta_proteins.values())))
+
+# Getting taxonomy names from taxon_id
+print("Fetching scientific names for proteins that are not in the Eukaryotes but in 90-species")
+for taxid in set.difference(set(selected_taxon), set(fasta_proteins.values())):
+    s = Entrez.esummary(db="taxonomy", id=taxid, retmode="xml")
+    result = Entrez.read(s)
+    print(taxid, result[0]['ScientificName'])
     
     
-    
+new_taxon = {name: id for (name, id) in gained_taxon.values() if id not in selected_taxon}
+gained_taxon_not_eukaryotes = {(name,id):count for (name,id),count in gained_taxon_count.items() if id not in set(fasta_proteins.values())}
+most_common_gained_taxon = Counter(gained_taxon_not_eukaryotes).most_common(20)
+df = []
+for (name, id), count in gained_taxon_not_eukaryotes.items():
+    df.append({'count': count, 'taxon_id': id, 'species_name': name})
+df = pd.DataFrame(df)
+df.sort_values(by='count', ascending=False, inplace=True)
+df.to_csv('/work/idoerg/ahphan/democafa_package/data/temp/gained_taxon_not_eukaryotes.tsv', sep='\t', index=False)

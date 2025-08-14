@@ -27,14 +27,23 @@ from Bio import SwissProt as sp
 from democafa.utils.ontology import clean_ontology_edges, filter_terms_given_obo, replace_alternate_GO_terms
 from democafa.config import GO_CODES
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    filename=datetime.now().strftime('retrieve_terms_%Y%m%d_%H%M%S.log'),
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+# Create a specific logger for this module (not the root logger)
+logger = logging.getLogger('retrieve_terms')
+logger.setLevel(logging.INFO)
+
+# Prevent messages from propagating to the root logger (so multiple loggers can coexist)
+logger.propagate = False
+
+# Create file handler
+log_filename = datetime.now().strftime('retrieve_terms_%Y%m%d_%H%M%S.log')
+file_handler = logging.FileHandler(log_filename)
+file_handler.setLevel(logging.INFO)
+formatter = logging.Formatter(
+    '%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     datefmt='%Y-%m-%d %H:%M:%S'
 )
-logger = logging.getLogger(__name__)
+file_handler.setFormatter(formatter)
+logger.addHandler(file_handler)
 
 
 def process_gaf_file(gaf_file):
@@ -70,7 +79,7 @@ def filter_evidence_codes(go_codes, selected='Experimental,IC,TAS'):
             accepted_codes.add(code)
         else:
             logger.warning(f"'{code}' is not a recognized evidence code.")
-    logger.info(f"Selected evidence codes: {accepted_codes}")
+    logger.debug(f"Selected evidence codes: {accepted_codes}")
     return {'Evidence': set(accepted_codes)}
 
 
@@ -79,7 +88,6 @@ def read_gaf(file_path, selected_codes):
     Read and process a GAF file (gzipped or plain text)
     Takes 1h45m for 22Gb uniprot goa (if not pre-filtered)
     """
-    logger.info(f"Reading GAF file: {file_path}")
     #selected_codes = filter_evidence_codes(go_codes, selected) # handle this before passing to this function
     data = []
     
@@ -138,10 +146,8 @@ def read_gaf_mp(file_path, selected_codes, use_mp=False, num_processes=None, chu
     Read and process a GAF file (gzipped or plain text) with multiprocessing.
     Takes 30m for 22Gb uniprot goa for 15 processes.
     """
-    logger.info("Starting GAF reading process")
-    logger.info(f"Input file: {file_path}")
-    logger.info(f"Using multiprocessing: {use_mp}")
-    
+    logger.info(f"Starting GAF reading process. Using multiprocessing: {use_mp}")
+
     if not use_mp:
         return read_gaf(file_path, selected_codes)
     else:
@@ -282,7 +288,6 @@ def process_go_from_dat(file_path, selected_codes):
 
 
 def wrapper_retrieve_terms(annot_file, selected_go_codes, graph, add_graph=None, output_tsv='train_terms.tsv'):
-    logger.info("Starting term retrieval process")
     logger.info(f"Annotation file: {annot_file}")
     logger.info(f"Selected GO codes: {selected_go_codes}")
     logger.info(f"Graph file: {graph}")
@@ -322,7 +327,6 @@ def wrapper_retrieve_terms(annot_file, selected_go_codes, graph, add_graph=None,
     logger.info(f"Initial annotations: {len(annotation_df)} for {len(set(annotation_df['EntryID']))} proteins")
     
     # load ontology graph and GO terms. obonet doesn't store OBSOLETE terms
-    logger.info("Loading ontology graph...")
     if add_graph is None:
         ontology_graph = clean_ontology_edges(obonet.read_obo(graph))
     else:
@@ -333,8 +337,7 @@ def wrapper_retrieve_terms(annot_file, selected_go_codes, graph, add_graph=None,
     
     obsolete_terms = set(annotation_df['term']) - set(ontology_graph.nodes())
     if obsolete_terms:
-        logger.warning(f"{len(obsolete_terms)} obsolete terms found in the annotation file: {list(obsolete_terms)[:10]}...")
-        logger.warning("These terms will not appear in terms file.")
+        logger.warning(f"{len(obsolete_terms)} obsolete terms found in the annotation file: {list(obsolete_terms)[:10]}. These terms will not appear in terms file.")
         annotation_df = annotation_df[~annotation_df['term'].isin(obsolete_terms)]
     
     # Remove terms that are not in the frozen graph in 3 steps 
@@ -348,9 +351,8 @@ def wrapper_retrieve_terms(annot_file, selected_go_codes, graph, add_graph=None,
         annotation_df_filtered = annotation_df.drop_duplicates()
         annotation_df_filtered.to_csv(output_tsv, sep='\t', index=False)
     
-    logger.info(f"Annotations saved to {output_tsv} with {len(annotation_df_filtered)} annotations for {len(set(annotation_df_filtered['EntryID']))} proteins.")
-    logger.info("Term retrieval process completed successfully")
-       
+    logger.info(f"Annotations saved to {output_tsv}")
+    logger.info(f"Total: {len(set(annotation_df_filtered['EntryID']))} proteins, {len(set(annotation_df_filtered['term']))} unique terms, {len(annotation_df_filtered)} annotations.")
 
 def parse_inputs(argv):
     parser = argparse.ArgumentParser(
@@ -374,8 +376,10 @@ def parse_inputs(argv):
     args = parser.parse_args(argv)
     
     # Configure logging level based on argument
-    logging.getLogger().setLevel(getattr(logging, args.log_level))
-    
+    logger.setLevel(getattr(logging, args.log_level))
+    for handler in logger.handlers:
+        handler.setLevel(getattr(logging, args.log_level))
+        
     return args
 
     # python3 -m democafa.datacollection.retrieve_terms --annot data/processed/cafa5/goa_uniprot_filtered_mp.gaf.213.gz
@@ -390,7 +394,6 @@ def parse_inputs(argv):
 def main():
     args = parse_inputs(sys.argv[1:])
     
-    logger.info("Starting retrieve_terms script")
     logger.info(f"Arguments: {vars(args)}")
     
     try:
@@ -402,7 +405,6 @@ def main():
             add_graph=args.add_graph,
             output_tsv=args.tsv
         )
-        logger.info("retrieve_terms script completed successfully")
     except Exception as e:
         logger.error(f"Error in retrieve_terms script: {str(e)}")
         raise

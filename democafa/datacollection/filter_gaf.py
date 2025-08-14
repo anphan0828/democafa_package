@@ -13,14 +13,23 @@ from Bio.UniProt import GOA
 from Bio import SwissProt as sp
 from Bio import SeqIO
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    filename=datetime.now().strftime('filter_gaf_%Y%m%d_%H%M%S.log'),
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+# Create a specific logger for this module (not the root logger)
+logger = logging.getLogger('filter_gaf')
+logger.setLevel(logging.INFO)
+
+# Prevent messages from propagating to the root logger (so multiple loggers can coexist)
+logger.propagate = False
+
+# Create file handler
+log_filename = datetime.now().strftime('filter_gaf_%Y%m%d_%H%M%S.log')
+file_handler = logging.FileHandler(log_filename)
+file_handler.setLevel(logging.INFO)
+formatter = logging.Formatter(
+    '%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     datefmt='%Y-%m-%d %H:%M:%S'
 )
-logger = logging.getLogger(__name__)
+file_handler.setFormatter(formatter)
+logger.addHandler(file_handler)
 
 
 def process_chunk_file(chunk_file, taxon, entries):
@@ -161,7 +170,7 @@ def filter_gaf(file_path, taxon, entries, output, use_mp=True, num_processes=Non
                         chunk_count += 1
                         current_chunk_lines = []
                         if chunk_count % 10 == 0:
-                            logger.info(f"Created chunk {chunk_count} with {chunk_size} records")
+                            logger.debug(f"Created chunk {chunk_count} with {chunk_size} records")
                             
                 # Write any remaining lines to the final chunk
                 if current_chunk_lines:
@@ -223,7 +232,9 @@ def parse_inputs(argv):
     args = parser.parse_args(argv)
     
     # Configure logging level based on argument
-    logging.getLogger().setLevel(getattr(logging, args.log_level))
+    logger.setLevel(getattr(logging, args.log_level))
+    for handler in logger.handlers:
+        handler.setLevel(getattr(logging, args.log_level))
     
     return args
 
@@ -231,7 +242,6 @@ def parse_inputs(argv):
 def main():
     args = parse_inputs(sys.argv[1:])
     
-    logger.info("Starting GAF filtering script")
     logger.info(f"Arguments: {vars(args)}")
     
     entries = None
@@ -243,8 +253,6 @@ def main():
         taxon = get_taxon_from_file(args.taxon)
         
     filter_gaf(args.annot, taxon, entries, args.output, use_mp=True, num_processes=None)
-    
-    logger.info("GAF filtering script completed successfully")
     
     # python3 -m democafa.datacollection.filter_gaf -a data/raw/goa_uniprot_all.gaf.226.gz -q data/raw/uniprot_sprot.fasta.gz -o data/processed/cafa6/goa_uniprot_filtered_mp.gaf.226.gz
 if __name__ == "__main__":
