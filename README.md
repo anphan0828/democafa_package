@@ -6,9 +6,8 @@ This project is a CAFA (Critical Assessment of protein Function Annotation) impl
 
 ## Key Features
 
-*   **Efficient Matrix Handling:** Utilizes efficient storage and reuse of large sparse matrices to prevent redundant matrix creation, save computation time, and reduce memory usage.
-*   **Modular Design:** Functionality is clearly separated into focused modules, making the project easy to maintain, extend, and reuse.
-*   **Configuration Management:** Centralized configuration in Python modules provides type-safe configuration that is easy to import, use, and version control.
+*   **Modular Design:** Functionality is clearly separated into focused modules that can be run as separate modules or in the wrapper main script.
+*   **Configuration:** File versions and data sources are defined in a config file and can be used across the package.
 
 ## Project Structure
 ### Directory Breakdown
@@ -23,15 +22,17 @@ This project is a CAFA (Critical Assessment of protein Function Annotation) impl
         *   **create\_test\_set.py:** Creates the combined test set.
         *   **retrieve\_sequences.py:** Collects sequence data.
         *   **retrieve\_terms.py:** Retrieves GO terms.
-    *   **baselines:** Contains modules implementing prediction algorithms.
+    *   **baselines:** Contains modules implementing prediction algorithms. These baseline methods will be entirely dockerized in the next update.
         *   **\_\_init\_\_.py:** Initializes the baselines module.
-        *   **blast.py:** Implements a BLAST-based prediction algorithm.
+        *   **blast_chunks.py:** Implements a BLAST-based prediction algorithm, with chunking logic for parallel processing.
         *   **goa_nonexp.py:** Implements a non-experimental GO annotations baseline prediction.
         *   **naive.py:** Implements a naive prediction algorithm.
-        *   **prott5.py:** Implements a ProtT5-embeddings-based prediction algorith.
+        *   **prott5_chunks.py:** Implements a ProtT5-embeddings-based prediction algorithm, with chunking logic for parallel processing.
+    *   **groundtruth:** Contains modules processing and classifying ground truth.
+        *   **classify_ground_truth.py:** Compares two annotation files and classify into No Knowledge, Limited Knowledge, and Partial Knowledge proteins.
+        *   **process_ground_truth.py:** Preprocesses hold out annotations to correct format for classifying.
     *   **utils:** Contains utility modules.
         *   **\_\_init\_\_.py:** Initializes the utilities module.
-        *   **dask\_write.py:** Provides utilities for working with Dask for efficient data writing operations.
         *   **ontology.py:** Provides shared ontology processing functions.
         *   **run_blast.sh:** Runs external NCBI BLAST (shell script) from terminal with bioconda::blast.
         *   **run_prott5.sh:** Runs external ProtT5 embeddings (shell script) from terminal with hugging face model.
@@ -47,7 +48,6 @@ democafa_package/
     data/
         raw/
         processed/
-        release/
     democafa/
         __init__.py
         config.py
@@ -61,13 +61,12 @@ democafa_package/
         baselines/
             __init__.py
             naive.py
-            blast.py
+            blast_chunks.py
             goa_nonexp.py
-            prott5.py
+            prott5_chunks.py
         utils/
             __init__.py
             ontology.py
-            dask_write.py
             run_blast.sh
             run_prott5.sh
             prott5-baseline/
@@ -115,7 +114,5 @@ python3 -m democafa.baselines.goa_nonexp <provide arguments as needed>
 # TODO:
 - Add example data
 - Add unit test
-- Use logging module
 - Proteins will be removed from evaluation set if their sequences changed between release and evaluation
-- Separate script for run_blast and run_prott5, but access to config paths
 - Add rerun argument to each of the script
