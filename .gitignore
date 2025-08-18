@@ -2,8 +2,5 @@ data/
 00notes
 *.pyc
 *.log
-democafa/baselines/blast_container/*
-democafa/baselines/goa_nonexp_container/*
-democafa/baselines/naive_container/*
-democafa/baselines/prott5_container/*
+
 
