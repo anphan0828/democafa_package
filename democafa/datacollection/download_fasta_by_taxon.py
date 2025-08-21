@@ -53,7 +53,34 @@ def download_fasta_by_taxon(taxon_id, output_file):
                 print(line, file=f)
             print(f'{progress} / {total}')
     
+
+def download_tsv_by_taxon(taxon_id, output_file):
+    """
+    Download FASTA sequences from UniProt for a given taxon ID and save to output_file
+    """
+    taxon_query = f'%28taxonomy_id%3A{"+OR+taxonomy_id%3A".join(taxon_id)}%29'
+    # Get plain text response, then write to gzip file
+    url = f"https://rest.uniprot.org/uniprotkb/search?&fields=accession%2Ccc_function&format=tsv&query={taxon_query}+AND+%28reviewed%3Atrue%29&size=500"
+    print(f"Downloading TSV file for taxon ID {taxon_id}...")
     
+    progress = 0
+    with gzip.open(output_file, 'wt') as f:
+        for batch, total in get_batch(url):
+            lines = batch.text.splitlines()
+            if not progress:
+                print(lines[0], file=f)
+            for line in lines[1:]:
+                # if line.startswith('>'):
+                #     progress += 1
+                print(line, file=f)
+            progress += len(lines)
+            print(f'{progress} / {total}')
+            
+    # get number of proteins with a Function summary
+    data = pd.read_csv(output_file, sep='\t', compression='gzip')
+    print(data['Function [CC]'].notnull().sum())
+
+
 def get_taxon_id_from_file(taxon_path):
     """
     Read taxon ID from a text file
