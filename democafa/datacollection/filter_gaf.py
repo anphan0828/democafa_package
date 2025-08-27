@@ -21,7 +21,9 @@ logger.setLevel(logging.INFO)
 logger.propagate = False
 
 # Create file handler
-log_filename = datetime.now().strftime('filter_gaf_%Y%m%d_%H%M%S.log')
+log_dir = 'logs'
+os.makedirs(log_dir, exist_ok=True)  # Create logs directory if it doesn't exist
+log_filename = os.path.join(log_dir, datetime.now().strftime('filter_gaf_%Y%m%d_%H%M%S.log'))
 file_handler = logging.FileHandler(log_filename)
 file_handler.setLevel(logging.INFO)
 formatter = logging.Formatter(

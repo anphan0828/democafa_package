@@ -32,7 +32,9 @@ logger.setLevel(logging.INFO)
 logger.propagate = False
 
 # Create file handler
-log_filename = datetime.now().strftime('create_test_set_%Y%m%d_%H%M%S.log')
+log_dir = 'logs'
+os.makedirs(log_dir, exist_ok=True)  # Create logs directory if it doesn't exist
+log_filename = os.path.join(log_dir, datetime.now().strftime('create_test_set_%Y%m%d_%H%M%S.log'))
 file_handler = logging.FileHandler(log_filename)
 file_handler.setLevel(logging.INFO)
 formatter = logging.Formatter(
@@ -155,7 +157,7 @@ def write_missing_aspects_fasta(fasta_proteins, complete_proteins, trembl_sequen
     #         print(f"Release version {uniprot_api_version} not found.")
 
 
-def write_fasta(fasta_proteins, trembl_sequences, output_file, uniprot_api_version=None):
+def write_fasta(fasta_proteins, trembl_sequences, output_file, num_queries, uniprot_api_version=None):
     """
     Write FASTA file all proteins with or without missing GO aspects (for partial knowledge evaluation).
     
@@ -165,13 +167,25 @@ def write_fasta(fasta_proteins, trembl_sequences, output_file, uniprot_api_versi
         uniprot_api_version: UniProt release version to retrieve TrEMBL sequences
         output_file: Path to output FASTA file
     """
-    with open(output_file, 'w') as fasta_out:
-        for protein_id in fasta_proteins:
-            seq_record = SeqRecord(Seq(fasta_proteins[protein_id][2]), id=fasta_proteins[protein_id][0], description=fasta_proteins[protein_id][1])
-            # values = fasta_proteins[protein_id]
-            # f.write(f'>{protein_id}\t{values[1]}\n{values[0]}\n')
-            SeqIO.write(seq_record, fasta_out, "fasta")
-    
+    if num_queries is None:
+        with open(output_file, 'w') as fasta_out:
+            for protein_id in fasta_proteins:
+                seq_record = SeqRecord(Seq(fasta_proteins[protein_id][2]), id=fasta_proteins[protein_id][0], description=fasta_proteins[protein_id][1])
+                # values = fasta_proteins[protein_id]
+                # f.write(f'>{protein_id}\t{values[1]}\n{values[0]}\n')
+                SeqIO.write(seq_record, fasta_out, "fasta")
+        num_selected = len(fasta_proteins)
+    else:
+        num_queries = int(num_queries)
+        count=0
+        with open(output_file, 'w') as fasta_out:
+            for protein_id in fasta_proteins:
+                seq_record = SeqRecord(Seq(fasta_proteins[protein_id][2]), id=fasta_proteins[protein_id][0], description=fasta_proteins[protein_id][1])
+                SeqIO.write(seq_record, fasta_out, "fasta")
+                count += 1
+                if count >= num_queries:
+                    break
+        num_selected = count
     # For fetching through UniProt website
     # with open(output_file.replace('.fasta', '_trembl.txt'), 'w') as trembl_out:
     #     for protein_id in trembl_proteins:
@@ -182,7 +196,7 @@ def write_fasta(fasta_proteins, trembl_sequences, output_file, uniprot_api_versi
         for protein_id, (header, sequence) in trembl_sequences.items():
             seq_record = SeqRecord(Seq(sequence), id=header, description="")
             SeqIO.write(seq_record, fasta_out, "fasta")
-    logger.info(f"Total sequences in test superset: {len(fasta_proteins) + len(trembl_sequences)}")
+    logger.info(f"Total sequences in test superset: {num_selected + len(trembl_sequences)}")
     # print(f"Appending {len(trembl_proteins)} TrEMBL proteins to {output_file}...")
     # if uniprot_api_version is None:
     #     for protein_id in trembl_proteins:
@@ -391,7 +405,7 @@ def create_train_sequences(proteins_with_terms, sequences_gzfile, trembl_sequenc
     logger.info(f"Total sequences in training data: {trembl_seq_count + seq_count} proteins in {len(all_taxid)} taxa")
     
 
-def create_test_set(terms_file, sequences_gzfile, out_fasta, train_out_fasta, train_out_taxonomy, include_all, uniprot_api_version=None, in_taxonomy=None):
+def create_test_set(terms_file, sequences_gzfile, out_fasta, train_out_fasta, train_out_taxonomy, include_all, num_queries=None, uniprot_api_version=None, in_taxonomy=None):
     # Read GO terms data
     logger.info("Reading GO terms data...")
     all_proteins, complete_proteins = get_proteins_with_all_aspects(terms_file)
@@ -420,9 +434,9 @@ def create_test_set(terms_file, sequences_gzfile, out_fasta, train_out_fasta, tr
     )
     # Append TrEMBL proteins to fasta file of test_superset_all.fasta and train_sequences.fasta
     if include_all: # including partial knowledge proteins
-        write_fasta(fasta_proteins, trembl_sequences, out_fasta, uniprot_api_version)
+        write_fasta(fasta_proteins, trembl_sequences, out_fasta, num_queries, uniprot_api_version)
     else: # only include proteins missing aspects (no knowledge and limited knowledge)
-        write_missing_aspects_fasta(fasta_proteins, complete_proteins, trembl_proteins, out_fasta, uniprot_api_version)
+        write_missing_aspects_fasta(fasta_proteins, complete_proteins, trembl_proteins, out_fasta, num_queries, uniprot_api_version)
     # write_species(species, in_taxonomy)
     
 
@@ -442,6 +456,8 @@ def parse_inputs(args):
                         help='Path to training taxonomy mapping file')
     parser.add_argument('--include_all', action='store_true', default=False,
                         help='Include all proteins in the test superset')
+    parser.add_argument('--num_queries', '-n', default=None,
+                        help='Number of queries to include in the test superset')
     parser.add_argument('--uniprot_api', '-u', required=False,
                         help='UniProt API version to retrieve TrEMBL sequences')
     parser.add_argument('--in_taxonomy', required=False, default=None)
@@ -472,6 +488,7 @@ def main():
         train_out_fasta=args.train_out_fasta,
         train_out_taxonomy=args.train_out_taxonomy,
         include_all=True,
+        num_queries=args.num_queries,
         uniprot_api_version=args.uniprot_api,
         in_taxonomy=args.in_taxonomy
     )

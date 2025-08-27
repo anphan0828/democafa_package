@@ -34,16 +34,41 @@ logger.setLevel(logging.INFO)
 # Prevent messages from propagating to the root logger (so multiple loggers can coexist)
 logger.propagate = False
 
-# Create file handler
-log_filename = datetime.now().strftime('retrieve_terms_%Y%m%d_%H%M%S.log')
-file_handler = logging.FileHandler(log_filename)
-file_handler.setLevel(logging.INFO)
-formatter = logging.Formatter(
-    '%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    datefmt='%Y-%m-%d %H:%M:%S'
-)
-file_handler.setFormatter(formatter)
-logger.addHandler(file_handler)
+def setup_logging(use_file_handler=True, log_level='INFO'):
+    """
+    Set up logging configuration.
+    
+    Args:
+        use_file_handler (bool): If True, log to file. If False, log to console.
+        log_level (str): Logging level ('DEBUG', 'INFO', 'WARNING', 'ERROR')
+    """
+    # Clear any existing handlers
+    for handler in logger.handlers[:]:
+        logger.removeHandler(handler)
+    
+    # Set logging level
+    logger.setLevel(getattr(logging, log_level))
+    
+    if use_file_handler:
+        # Create file handler
+        log_dir = 'logs'
+        os.makedirs(log_dir, exist_ok=True)  # Create logs directory if it doesn't exist
+        log_filename = os.path.join(log_dir, datetime.now().strftime('retrieve_terms_%Y%m%d_%H%M%S.log'))
+        handler = logging.FileHandler(log_filename)
+    else:
+        # Create console handler
+        handler = logging.StreamHandler(sys.stdout)
+    
+    handler.setLevel(getattr(logging, log_level))
+    formatter = logging.Formatter(
+        '%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+        datefmt='%Y-%m-%d %H:%M:%S'
+    )
+    handler.setFormatter(formatter)
+    logger.addHandler(handler)
+
+# When imported as a module, set up console logging by default
+setup_logging(use_file_handler=False)
 
 
 def process_gaf_file(gaf_file):
@@ -375,11 +400,6 @@ def parse_inputs(argv):
     
     args = parser.parse_args(argv)
     
-    # Configure logging level based on argument
-    logger.setLevel(getattr(logging, args.log_level))
-    for handler in logger.handlers:
-        handler.setLevel(getattr(logging, args.log_level))
-        
     return args
 
     # python3 -m democafa.datacollection.retrieve_terms --annot data/processed/cafa5/goa_uniprot_filtered_mp.gaf.213.gz
@@ -393,6 +413,9 @@ def parse_inputs(argv):
     
 def main():
     args = parse_inputs(sys.argv[1:])
+    
+    # Set up file logging when running as a script
+    setup_logging(use_file_handler=True, log_level=args.log_level)
     
     logger.info(f"Arguments: {vars(args)}")
     
