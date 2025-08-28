@@ -157,7 +157,7 @@ def write_missing_aspects_fasta(fasta_proteins, complete_proteins, trembl_sequen
     #         print(f"Release version {uniprot_api_version} not found.")
 
 
-def write_fasta(fasta_proteins, trembl_sequences, output_file, num_queries, uniprot_api_version=None):
+def write_fasta(fasta_proteins, trembl_sequences, annotated_proteins_to_include, output_file, num_queries, uniprot_api_version=None):
     """
     Write FASTA file all proteins with or without missing GO aspects (for partial knowledge evaluation).
     
@@ -179,7 +179,13 @@ def write_fasta(fasta_proteins, trembl_sequences, output_file, num_queries, unip
         num_queries = int(num_queries)
         count=0
         with open(output_file, 'w') as fasta_out:
+            for protein_id in annotated_proteins_to_include:
+                seq_record = SeqRecord(Seq(fasta_proteins[protein_id][2]), id=fasta_proteins[protein_id][0], description=fasta_proteins[protein_id][1])
+                SeqIO.write(seq_record, fasta_out, "fasta")
+                count += 1
             for protein_id in fasta_proteins:
+                if protein_id in annotated_proteins_to_include:
+                    continue
                 seq_record = SeqRecord(Seq(fasta_proteins[protein_id][2]), id=fasta_proteins[protein_id][0], description=fasta_proteins[protein_id][1])
                 SeqIO.write(seq_record, fasta_out, "fasta")
                 count += 1
@@ -432,9 +438,14 @@ def create_test_set(terms_file, sequences_gzfile, out_fasta, train_out_fasta, tr
         train_out_fasta=train_out_fasta,
         train_out_taxonomy=train_out_taxonomy
     )
+    # For test data only (to make sure that there are proteins with non-experimental terms in the test superset):
+    if num_queries is not None:
+        annotated_proteins_to_include = set.intersection(all_proteins, set(fasta_proteins.keys()))
+    else:
+        annotated_proteins_to_include = set()
     # Append TrEMBL proteins to fasta file of test_superset_all.fasta and train_sequences.fasta
     if include_all: # including partial knowledge proteins
-        write_fasta(fasta_proteins, trembl_sequences, out_fasta, num_queries, uniprot_api_version)
+        write_fasta(fasta_proteins, trembl_sequences, annotated_proteins_to_include, out_fasta, num_queries, uniprot_api_version)
     else: # only include proteins missing aspects (no knowledge and limited knowledge)
         write_missing_aspects_fasta(fasta_proteins, complete_proteins, trembl_proteins, out_fasta, num_queries, uniprot_api_version)
     # write_species(species, in_taxonomy)
