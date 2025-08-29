@@ -81,8 +81,8 @@ def wrapper_ground_truth(annot_known, annot2, query_file, graph, graph2, out_pre
     # Creating "terms-of-interest" set (use this for GOslim too)
     toi = set.intersection(set(obonet.read_obo(graph).nodes()), set(obonet.read_obo(graph2).nodes()))
     # dfk_df2_toi = dfk_df2[dfk_df2['term'].isin(toi)]
-    dfk = dfk[dfk['term'].isin(toi)]
-    df2 = df2[df2['term'].isin(toi)]
+    dfk = dfk[(dfk['term'].isin(toi)) & (dfk['EntryID'].isin(query_ids))] 
+    df2 = df2[(df2['term'].isin(toi)) & (df2['EntryID'].isin(query_ids))]
     logger.info(f"Terms of interest: {len(toi)} terms")
     logger.info(f"Known annotations after filtering: {len(dfk)} annotations")
     logger.info(f"New annotations after filtering: {len(df2)} annotations")
@@ -108,6 +108,8 @@ def wrapper_ground_truth(annot_known, annot2, query_file, graph, graph2, out_pre
     NK_df = df2[df2['EntryID'].isin(NK)].reset_index(drop=True) # propagated already 
     NK_asp_pairs = NK_df[['EntryID', 'aspect']].drop_duplicates().reset_index(drop=True)
     # NK_t1 = filter_terms_given_obo(NK_df, current_graph=graph2, pivot_graph=graph)
+    if len(NK_df) == 0:
+        logger.warning("No proteins found in No Knowledge subset")
     NK_df.to_csv(f'{out_prefix.replace(".tsv","_NK.tsv")}', sep="\t", index=False, header=True)
     
     # LK: proteins in query_ids that gained new aspect in df2
@@ -135,18 +137,26 @@ def wrapper_ground_truth(annot_known, annot2, query_file, graph, graph2, out_pre
             else:
                 LK_dict[row['EntryID']].add(row['aspect'])
     
-    LK_df = pd.DataFrame()
+    LK_df = pd.DataFrame(columns=['EntryID','term','aspect'])
     for protein, aspects in LK_dict.items():
         df = df2_gain[(df2_gain['EntryID'] == protein) & (df2_gain['aspect'].isin(aspects))]
         LK_df = pd.concat([LK_df, df], ignore_index=True) # leaf only
-    LK_asp_pairs = LK_df[['EntryID', 'aspect']].drop_duplicates()
+    if len(LK_df) == 0:
+        LK_asp_pairs = pd.DataFrame(columns=['EntryID', 'aspect'])
+        logger.warning("No proteins found in df2_gain for Limited Knowledge classification.")
+    else:
+        LK_asp_pairs = LK_df[['EntryID', 'aspect']].drop_duplicates()
     LK_df.to_csv(f'{out_prefix.replace(".tsv","_LK.tsv")}', sep="\t", index=False, header=True) # new terms propagated
 
-    PK_df = pd.DataFrame()
+    PK_df = pd.DataFrame(columns=['EntryID','term','aspect'])
     for protein, aspects in PK_dict.items():
         df = df2_gain[(df2_gain['EntryID'] == protein) & (df2_gain['aspect'].isin(aspects))]
         PK_df = pd.concat([PK_df, df], ignore_index=True)
-    PK_asp_pairs = PK_df[['EntryID', 'aspect']].drop_duplicates().reset_index(drop=True)
+    if len(PK_df) == 0:
+        PK_asp_pairs = pd.DataFrame(columns=['EntryID', 'aspect'])
+        logger.warning("No proteins found in df2_gain for Partial Knowledge classification.")
+    else:
+        PK_asp_pairs = PK_df[['EntryID', 'aspect']].drop_duplicates().reset_index(drop=True)
     PK_df.to_csv(f'{out_prefix.replace(".tsv","_PK.tsv")}', sep="\t", index=False, header=True) # new terms propagated
     
     assert len(NK_asp_pairs) + len(LK_asp_pairs) + len(PK_asp_pairs) == len(p_asp_pairs), "Sum of aspect pairs in NK, LK, PK should equal total gained aspect pairs"
