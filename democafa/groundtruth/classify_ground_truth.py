@@ -47,11 +47,6 @@ logger.addHandler(file_handler)
 
 def wrapper_ground_truth(annot_known, annot2, query_file, graph, graph2, out_prefix):
     logger.info(f"Starting ground truth classification")
-    logger.info(f"Known annotations file: {annot_known}")
-    logger.info(f"New annotations file: {annot2}")
-    logger.info(f"Query file: {query_file}")
-    logger.info(f"Frozen graph: {graph}")
-    logger.info(f"Ground truth graph: {graph2}")
     logger.info(f"Output prefix: {out_prefix}")
     
     # Collect all target proteins
@@ -80,6 +75,12 @@ def wrapper_ground_truth(annot_known, annot2, query_file, graph, graph2, out_pre
     # During re-propagation with frozen graph, some obsolete terms (at t1) reappeared, so remove them
     # Creating "terms-of-interest" set (use this for GOslim too)
     toi = set.intersection(set(obonet.read_obo(graph).nodes()), set(obonet.read_obo(graph2).nodes()))
+    remove_terms = {"GO:0003674","GO:0008150","GO:0005575"}
+    logger.info(f"Removing terms: {remove_terms}")
+    toi = toi - remove_terms
+    with open(f'{out_prefix.replace(".tsv","_terms_of_interest.txt")}', 'w') as f:
+        f.write("\n".join(toi))
+    # TODO: remove roots and protein-binding out of toi
     # dfk_df2_toi = dfk_df2[dfk_df2['term'].isin(toi)]
     dfk = dfk[(dfk['term'].isin(toi)) & (dfk['EntryID'].isin(query_ids))] 
     df2 = df2[(df2['term'].isin(toi)) & (df2['EntryID'].isin(query_ids))]
@@ -97,10 +98,10 @@ def wrapper_ground_truth(annot_known, annot2, query_file, graph, graph2, out_pre
     p_asp_pairs = df2_gain[['EntryID', 'aspect']].drop_duplicates().reset_index(drop=True)
     logger.info(f"Number of proteins gaining terms: {len(df2_gain['EntryID'].unique())}, with {len(p_asp_pairs)} protein-aspect pairs")
     
-    # Remove already existing annotations in df2 (biocuration redundancy)
-    redundant_proteins = set.difference(set(df2['EntryID']), set(df2_gain['EntryID']))
-    if len(redundant_proteins) > 0:
-        logger.warning(f"There were {len(redundant_proteins)} proteins whose new annotations already existed: {list(redundant_proteins)[:10]}")
+    # # Remove already existing annotations in df2 (biocuration redundancy or partial knowledge proteins)
+    # redundant_proteins = set.difference(set(df2['EntryID']), set(df2_gain['EntryID']))
+    # if len(redundant_proteins) > 0:
+    #     logger.warning(f"There were {len(redundant_proteins)} proteins whose new annotations already existed: {list(redundant_proteins)[:10]}")
         
     # NK: proteins in query_ids that are in df2 but not in dfk  
     logger.info("Processing No Knowledge proteins...")
@@ -111,69 +112,133 @@ def wrapper_ground_truth(annot_known, annot2, query_file, graph, graph2, out_pre
     if len(NK_df) == 0:
         logger.warning("No proteins found in No Knowledge subset")
     NK_df.to_csv(f'{out_prefix.replace(".tsv","_NK.tsv")}', sep="\t", index=False, header=True)
-    
+    logger.info(f"Number of NK proteins: {len(NK)}, by aspect: {dict(NK_asp_pairs['aspect'].value_counts())}")
+
     # LK: proteins in query_ids that gained new aspect in df2
     logger.info("Processing Limited Knowledge and Partial Knowledge proteins...")
     remaining_ids = set.intersection(set(query_ids), set(df2_gain['EntryID'])) - set(NK) # proteins in query_ids that gained new terms
-    dfk_asp_pairs = dfk[dfk['EntryID'].isin(remaining_ids)].groupby('EntryID')['aspect'].apply(set).reset_index() # protein-aspect pairs in t0
+    if len(remaining_ids) == 0:
+        logger.warning("No remaining proteins for LK/PK classification")
+        # Create empty dataframes and save
+        empty_df = pd.DataFrame(columns=['EntryID','term','aspect'])
+        empty_df.to_csv(f'{out_prefix.replace(".tsv","_LK.tsv")}', sep="\t", index=False, header=True)
+        empty_df.to_csv(f'{out_prefix.replace(".tsv","_PK.tsv")}', sep="\t", index=False, header=True)
+        empty_df.to_csv(f'{out_prefix.replace(".tsv","_PK_known.tsv")}', sep="\t", index=False, header=True)
+        return
+    
+    dfk_remaining = dfk[dfk['EntryID'].isin(remaining_ids)]
+    known_asp_pairs = dfk_remaining.groupby('EntryID')['aspect'].apply(set).to_dict() # protein-aspect pairs in t0
     logger.debug(f"Remaining IDs for LK/PK classification: {len(remaining_ids)} proteins")
     
-    # Check each protein-aspect pair in gained dataframe
-    # If aspect is in dfk then it is Limited Knowledge, otherwise Partial Knowledge
-    LK_dict = {}
-    PK_dict = {}
-    for _, row in p_asp_pairs.iterrows():
-        if row['EntryID'] not in remaining_ids:
-            continue # already classified as NK
-        dfk_asp = dfk_asp_pairs[dfk_asp_pairs['EntryID'] == row['EntryID']]['aspect'].values[0]
-        if row['aspect'] in dfk_asp:
-            if row['EntryID'] not in PK_dict:
-                PK_dict[row['EntryID']] = set(row['aspect'])
-            else:
-                PK_dict[row['EntryID']].add(row['aspect'])
-        else:
-            if row['EntryID'] not in LK_dict:
-                LK_dict[row['EntryID']] = set(row['aspect'])
-            else:
-                LK_dict[row['EntryID']].add(row['aspect'])
+    # Check each remaining protein-aspect pair in gained dataframe (p_asp_pairs)
+    p_asp_pairs_filtered = p_asp_pairs[p_asp_pairs['EntryID'].isin(remaining_ids)].copy()
+    # Vectorized classification: add a column indicating if aspect is known
+    p_asp_pairs_filtered['aspect_known'] = p_asp_pairs_filtered.apply(
+        lambda row: row['aspect'] in known_asp_pairs.get(row['EntryID'], set()), 
+        axis=1
+    )
+    # If aspect is known at t0 (known_asp_pairs) then it is Partial Knowledge, otherwise Limited Knowledge
+    LK_pairs = p_asp_pairs_filtered[~p_asp_pairs_filtered['aspect_known']]
+    PK_pairs = p_asp_pairs_filtered[p_asp_pairs_filtered['aspect_known']]
     
-    LK_df = pd.DataFrame(columns=['EntryID','term','aspect'])
-    for protein, aspects in LK_dict.items():
-        df = df2_gain[(df2_gain['EntryID'] == protein) & (df2_gain['aspect'].isin(aspects))]
-        LK_df = pd.concat([LK_df, df], ignore_index=True) # leaf only
-    if len(LK_df) == 0:
-        LK_asp_pairs = pd.DataFrame(columns=['EntryID', 'aspect'])
-        logger.warning("No proteins found in df2_gain for Limited Knowledge classification.")
-    else:
+    if len(LK_pairs) > 0:
+        LK_df = df2_gain.merge(
+            LK_pairs[['EntryID', 'aspect']], 
+            on=['EntryID', 'aspect'], 
+            how='inner'
+        )
         LK_asp_pairs = LK_df[['EntryID', 'aspect']].drop_duplicates()
-    LK_df.to_csv(f'{out_prefix.replace(".tsv","_LK.tsv")}', sep="\t", index=False, header=True) # new terms propagated
-
-    PK_df = pd.DataFrame(columns=['EntryID','term','aspect'])
-    for protein, aspects in PK_dict.items():
-        df = df2_gain[(df2_gain['EntryID'] == protein) & (df2_gain['aspect'].isin(aspects))]
-        PK_df = pd.concat([PK_df, df], ignore_index=True)
-    if len(PK_df) == 0:
-        PK_asp_pairs = pd.DataFrame(columns=['EntryID', 'aspect'])
-        logger.warning("No proteins found in df2_gain for Partial Knowledge classification.")
     else:
+        LK_df = pd.DataFrame(columns=['EntryID','term','aspect'])
+        LK_asp_pairs = pd.DataFrame(columns=['EntryID', 'aspect'])
+        logger.warning("No proteins found for Limited Knowledge classification.")
+    LK = set(LK_pairs['EntryID'].unique()) if len(LK_pairs) > 0 else set()
+    LK_df.to_csv(f'{out_prefix.replace(".tsv","_LK.tsv")}', sep="\t", index=False, header=True)
+    logger.info(f"Number of LK proteins: {len(LK)} proteins, by aspect: {dict(LK_asp_pairs['aspect'].value_counts()) if len(LK_asp_pairs) > 0 else {}}")
+
+    # Create PK DataFrame using merge instead of loops
+    if len(PK_pairs) > 0:
+        PK_df = df2_gain.merge(
+            PK_pairs[['EntryID', 'aspect']], 
+            on=['EntryID', 'aspect'], 
+            how='inner'
+        )
         PK_asp_pairs = PK_df[['EntryID', 'aspect']].drop_duplicates().reset_index(drop=True)
-    PK_df.to_csv(f'{out_prefix.replace(".tsv","_PK.tsv")}', sep="\t", index=False, header=True) # new terms propagated
+        
+        # Create PK_known DataFrame using merge instead of loops
+        dfk_PK = dfk.merge(
+            PK_pairs[['EntryID', 'aspect']], 
+            on=['EntryID', 'aspect'], 
+            how='inner'
+        )
+    else:
+        PK_df = pd.DataFrame(columns=['EntryID','term','aspect'])
+        PK_asp_pairs = pd.DataFrame(columns=['EntryID', 'aspect'])
+        dfk_PK = pd.DataFrame(columns=['EntryID','term','aspect'])
+        logger.warning("No proteins found for Partial Knowledge classification.")
+    PK = set(PK_pairs['EntryID'].unique()) if len(PK_pairs) > 0 else set()
+    PK_df.to_csv(f'{out_prefix.replace(".tsv","_PK.tsv")}', sep="\t", index=False, header=True)
+    dfk_PK.to_csv(f'{out_prefix.replace(".tsv","_PK_known.tsv")}', sep="\t", index=False, header=True)
+    logger.info(f"Number of PK proteins: {len(PK)} proteins, by aspect: {dict(PK_asp_pairs['aspect'].value_counts()) if len(PK_asp_pairs) > 0 else {}}")
+    
+    # LK_dict = {}
+    # PK_dict = {}
+    # for _, row in p_asp_pairs.iterrows():
+    #     if row['EntryID'] not in remaining_ids:
+    #         continue # already classified as NK
+    #     dfk_asp = dfk_asp_pairs[dfk_asp_pairs['EntryID'] == row['EntryID']]['aspect'].values[0]
+    #     if row['aspect'] in dfk_asp: # if gained aspect is in known aspect, it is PK
+    #         if row['EntryID'] not in PK_dict:
+    #             PK_dict[row['EntryID']] = set(row['aspect'])
+    #         else:
+    #             PK_dict[row['EntryID']].add(row['aspect'])
+    #     else: # otherwise, it is LK in that aspect
+    #         if row['EntryID'] not in LK_dict:
+    #             LK_dict[row['EntryID']] = set(row['aspect'])
+    #         else:
+    #             LK_dict[row['EntryID']].add(row['aspect'])
+    
+    # LK_df = pd.DataFrame(columns=['EntryID','term','aspect'])
+    # for protein, aspects in LK_dict.items():
+    #     df = df2_gain[(df2_gain['EntryID'] == protein) & (df2_gain['aspect'].isin(aspects))]
+    #     LK_df = pd.concat([LK_df, df], ignore_index=True) # leaf and ancestor (because df2 is already propagated)
+    # if len(LK_df) == 0:
+    #     LK_asp_pairs = pd.DataFrame(columns=['EntryID', 'aspect'])
+    #     logger.warning("No proteins found in df2_gain for Limited Knowledge classification.")
+    # else:
+    #     LK_asp_pairs = LK_df[['EntryID', 'aspect']].drop_duplicates()
+    # LK_df.to_csv(f'{out_prefix.replace(".tsv","_LK.tsv")}', sep="\t", index=False, header=True) # new terms propagated
+    # logger.info(f"Number of LK proteins: {len(LK_dict)}, by aspect: {dict(LK_asp_pairs['aspect'].value_counts())}")
+
+    # PK_df = pd.DataFrame(columns=['EntryID','term','aspect'])
+    # for protein, aspects in PK_dict.items():
+    #     df = df2_gain[(df2_gain['EntryID'] == protein) & (df2_gain['aspect'].isin(aspects))]
+    #     PK_df = pd.concat([PK_df, df], ignore_index=True)
+    # if len(PK_df) == 0:
+    #     PK_asp_pairs = pd.DataFrame(columns=['EntryID', 'aspect'])
+    #     logger.warning("No proteins found in df2_gain for Partial Knowledge classification.")
+    # else:
+    #     PK_asp_pairs = PK_df[['EntryID', 'aspect']].drop_duplicates().reset_index(drop=True)
+    # PK_df.to_csv(f'{out_prefix.replace(".tsv","_PK.tsv")}', sep="\t", index=False, header=True) # new terms only 
     
     assert len(NK_asp_pairs) + len(LK_asp_pairs) + len(PK_asp_pairs) == len(p_asp_pairs), "Sum of aspect pairs in NK, LK, PK should equal total gained aspect pairs"
     logger.debug("Assertion passed: sum of aspect pairs equals total gained aspect pairs")
-    # TODO: protein-specific toi file for evaluation
-        
-    logger.info(f"- No Knowledge (NK): {len(NK)} proteins, {len(NK_df)} terms")
-    logger.info(f"- Limited Knowledge (LK): {len(LK_dict)} proteins, {len(LK_df)} terms")
-    logger.info(f"- Partial Knowledge (PK): {len(PK_dict)} proteins, {len(PK_df)} new child terms gained")
+    # dfk_PK = []
+    # for protein, aspect in zip(PK_asp_pairs['EntryID'], PK_asp_pairs['aspect']):
+    #     add_PK = dfk[(dfk['EntryID'] == protein) & (dfk['aspect'] == aspect)]
+    #     dfk_PK.append(add_PK)
+    # dfk_PK = pd.concat(dfk_PK, ignore_index=True)
+    # dfk_PK.to_csv(f'{out_prefix.replace(".tsv","_PK_known.tsv")}', sep="\t", index=False, header=True)
     
-    all_targets = set.union(set(NK), set(LK_dict.keys()), set(PK_dict.keys()))
+    logger.info(f"- No Knowledge (NK): {len(NK)} proteins, {len(NK_df)} terms")
+    logger.info(f"- Limited Knowledge (LK): {len(LK)} proteins, {len(LK_df)} terms")
+    logger.info(f"- Partial Knowledge (PK): {len(PK)} proteins, {len(PK_df)} new child terms gained")
+
+    all_targets = set.union(set(NK), set(LK), set(PK))
     logger.info(f"Total number of target proteins: {len(all_targets)}")
     with open(f'{out_prefix.replace(".tsv","_targets.tsv")}', 'w') as f:
         for target in all_targets:
             f.write(f"{target}\n")
-            
-
 
 def parse_inputs(argv):
     parser = argparse.ArgumentParser(
