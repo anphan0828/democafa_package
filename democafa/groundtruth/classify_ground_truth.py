@@ -12,6 +12,7 @@ This script can be run from command line with arguments, or imported as a module
 """
 
 import sys
+import os
 import obonet
 import argparse
 import pandas as pd
@@ -19,30 +20,60 @@ import numpy as np
 from Bio import SeqIO
 import gzip
 import scipy.sparse 
+import logging
+from datetime import datetime
 from democafa.utils.ontology import clean_ontology_edges, fetch_aspect, propagate_terms, filter_terms_given_obo
+
+# Create a specific logger for this module (not the root logger)
+logger = logging.getLogger('classify_ground_truth')
+logger.setLevel(logging.INFO)
+
+# Prevent messages from propagating to the root logger (so multiple loggers can coexist)
+logger.propagate = False
+
+# Create file handler
+log_dir = 'logs'
+os.makedirs(log_dir, exist_ok=True)  # Create logs directory if it doesn't exist
+log_filename = os.path.join(log_dir, datetime.now().strftime('classify_ground_truth_%Y%m%d_%H%M%S.log'))
+file_handler = logging.FileHandler(log_filename)
+file_handler.setLevel(logging.INFO)
+formatter = logging.Formatter(
+    '%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S'
+)
+file_handler.setFormatter(formatter)
+logger.addHandler(file_handler)
 
 
 def wrapper_ground_truth(annot_known, annot2, query_file, graph, graph2, out_prefix):
+    logger.info(f"Starting ground truth classification")
+    logger.info(f"Known annotations file: {annot_known}")
+    logger.info(f"New annotations file: {annot2}")
+    logger.info(f"Query file: {query_file}")
+    logger.info(f"Frozen graph: {graph}")
+    logger.info(f"Ground truth graph: {graph2}")
+    logger.info(f"Output prefix: {out_prefix}")
+    
     # Collect all target proteins
     query_ids = []
     is_gzipped = query_file.endswith('.gz')
     open_func = gzip.open if is_gzipped else open
     mode = 'rt' if is_gzipped else 'r'
     if '.fasta' in query_file:
-        print("Reading query IDs from FASTA file")
+        logger.info("Reading query IDs from FASTA file")
         with open_func(query_file, mode) as handle:
             for record in SeqIO.parse(handle, 'fasta'):
                 entry_id = record.id.split("|")[1] if "|" in record.id else record.id
                 query_ids.append(entry_id)
     elif '.txt' in query_file:
-        print("Reading query IDs from text file")
+        logger.info("Reading query IDs from text file")
         with open(query_file, 'r') as handle:
             query_ids = [line.strip() for line in handle]
     else:
-        print("Please provide a fasta file or a text file with query IDs")
+        logger.error("Please provide a fasta file or a text file with query IDs")
         sys.exit(1)
     
-    print(f"Number of proteins in query file: {len(query_ids)}")
+    logger.info(f"Number of proteins in query file: {len(query_ids)}")
     dfk = pd.read_csv(annot_known, sep='\t', header=0) 
     df2 = pd.read_csv(annot2, sep='\t', header=0)
     
@@ -50,36 +81,42 @@ def wrapper_ground_truth(annot_known, annot2, query_file, graph, graph2, out_pre
     # Creating "terms-of-interest" set (use this for GOslim too)
     toi = set.intersection(set(obonet.read_obo(graph).nodes()), set(obonet.read_obo(graph2).nodes()))
     # dfk_df2_toi = dfk_df2[dfk_df2['term'].isin(toi)]
-    dfk = dfk[dfk['term'].isin(toi)]
-    df2 = df2[df2['term'].isin(toi)]
+    dfk = dfk[(dfk['term'].isin(toi)) & (dfk['EntryID'].isin(query_ids))] 
+    df2 = df2[(df2['term'].isin(toi)) & (df2['EntryID'].isin(query_ids))]
+    logger.info(f"Terms of interest: {len(toi)} terms")
+    logger.info(f"Known annotations after filtering: {len(dfk)} annotations")
+    logger.info(f"New annotations after filtering: {len(df2)} annotations")
     
     
     # Compare dfk and df2 to find proteins that gained new terms
     dfk_df2_toi = dfk.merge(df2, on=df2.columns.to_list(), how='outer', indicator=True)
-    print(dfk_df2_toi['_merge'].value_counts())
+    logger.info(f"Merge results: {dict(dfk_df2_toi['_merge'].value_counts())}")
     df2_gain = dfk_df2_toi.loc[dfk_df2_toi._merge=='right_only',dfk_df2_toi.columns!='_merge'] # new terms
-    print(f"Number of terms gained in each aspect: {df2_gain['aspect'].value_counts()}")
+    logger.info(f"Number of terms gained in each aspect: {dict(df2_gain['aspect'].value_counts())}")
     
     p_asp_pairs = df2_gain[['EntryID', 'aspect']].drop_duplicates().reset_index(drop=True)
-    print(f"Number of proteins gaining terms: {len(df2_gain['EntryID'].unique())}, with {len(p_asp_pairs)} protein-aspect pairs")
+    logger.info(f"Number of proteins gaining terms: {len(df2_gain['EntryID'].unique())}, with {len(p_asp_pairs)} protein-aspect pairs")
     
     # Remove already existing annotations in df2 (biocuration redundancy)
     redundant_proteins = set.difference(set(df2['EntryID']), set(df2_gain['EntryID']))
     if len(redundant_proteins) > 0:
-        print(f"There were {len(redundant_proteins)} proteins whose new annotations already existed: {redundant_proteins}")
+        logger.warning(f"There were {len(redundant_proteins)} proteins whose new annotations already existed: {list(redundant_proteins)[:10]}")
         
     # NK: proteins in query_ids that are in df2 but not in dfk  
-    print("Processing No Knowledge...")
+    logger.info("Processing No Knowledge proteins...")
     NK = set.intersection(set.difference(set(df2['EntryID']), set(dfk['EntryID'])), set(query_ids))
     NK_df = df2[df2['EntryID'].isin(NK)].reset_index(drop=True) # propagated already 
     NK_asp_pairs = NK_df[['EntryID', 'aspect']].drop_duplicates().reset_index(drop=True)
     # NK_t1 = filter_terms_given_obo(NK_df, current_graph=graph2, pivot_graph=graph)
+    if len(NK_df) == 0:
+        logger.warning("No proteins found in No Knowledge subset")
     NK_df.to_csv(f'{out_prefix.replace(".tsv","_NK.tsv")}', sep="\t", index=False, header=True)
     
     # LK: proteins in query_ids that gained new aspect in df2
-    print("Processing Limited Knowledge and Partial Knowledge...")
+    logger.info("Processing Limited Knowledge and Partial Knowledge proteins...")
     remaining_ids = set.intersection(set(query_ids), set(df2_gain['EntryID'])) - set(NK) # proteins in query_ids that gained new terms
     dfk_asp_pairs = dfk[dfk['EntryID'].isin(remaining_ids)].groupby('EntryID')['aspect'].apply(set).reset_index() # protein-aspect pairs in t0
+    logger.debug(f"Remaining IDs for LK/PK classification: {len(remaining_ids)} proteins")
     
     # Check each protein-aspect pair in gained dataframe
     # If aspect is in dfk then it is Limited Knowledge, otherwise Partial Knowledge
@@ -100,29 +137,38 @@ def wrapper_ground_truth(annot_known, annot2, query_file, graph, graph2, out_pre
             else:
                 LK_dict[row['EntryID']].add(row['aspect'])
     
-    LK_df = pd.DataFrame()
+    LK_df = pd.DataFrame(columns=['EntryID','term','aspect'])
     for protein, aspects in LK_dict.items():
         df = df2_gain[(df2_gain['EntryID'] == protein) & (df2_gain['aspect'].isin(aspects))]
         LK_df = pd.concat([LK_df, df], ignore_index=True) # leaf only
-    LK_asp_pairs = LK_df[['EntryID', 'aspect']].drop_duplicates()
+    if len(LK_df) == 0:
+        LK_asp_pairs = pd.DataFrame(columns=['EntryID', 'aspect'])
+        logger.warning("No proteins found in df2_gain for Limited Knowledge classification.")
+    else:
+        LK_asp_pairs = LK_df[['EntryID', 'aspect']].drop_duplicates()
     LK_df.to_csv(f'{out_prefix.replace(".tsv","_LK.tsv")}', sep="\t", index=False, header=True) # new terms propagated
 
-    PK_df = pd.DataFrame()
+    PK_df = pd.DataFrame(columns=['EntryID','term','aspect'])
     for protein, aspects in PK_dict.items():
         df = df2_gain[(df2_gain['EntryID'] == protein) & (df2_gain['aspect'].isin(aspects))]
         PK_df = pd.concat([PK_df, df], ignore_index=True)
-    PK_asp_pairs = PK_df[['EntryID', 'aspect']].drop_duplicates().reset_index(drop=True)
+    if len(PK_df) == 0:
+        PK_asp_pairs = pd.DataFrame(columns=['EntryID', 'aspect'])
+        logger.warning("No proteins found in df2_gain for Partial Knowledge classification.")
+    else:
+        PK_asp_pairs = PK_df[['EntryID', 'aspect']].drop_duplicates().reset_index(drop=True)
     PK_df.to_csv(f'{out_prefix.replace(".tsv","_PK.tsv")}', sep="\t", index=False, header=True) # new terms propagated
     
     assert len(NK_asp_pairs) + len(LK_asp_pairs) + len(PK_asp_pairs) == len(p_asp_pairs), "Sum of aspect pairs in NK, LK, PK should equal total gained aspect pairs"
+    logger.debug("Assertion passed: sum of aspect pairs equals total gained aspect pairs")
     # TODO: protein-specific toi file for evaluation
         
-    print(f"Number of proteins in NK: {len(NK)}, with {len(NK_df)} terms")
-    print(f"Number of proteins in LK: {len(LK_dict)}, with {len(LK_df)} terms")
-    print(f"Number of proteins in PK: {len(PK_dict)}, with {len(PK_df)} new child terms gained")
+    logger.info(f"- No Knowledge (NK): {len(NK)} proteins, {len(NK_df)} terms")
+    logger.info(f"- Limited Knowledge (LK): {len(LK_dict)} proteins, {len(LK_df)} terms")
+    logger.info(f"- Partial Knowledge (PK): {len(PK_dict)} proteins, {len(PK_df)} new child terms gained")
     
     all_targets = set.union(set(NK), set(LK_dict.keys()), set(PK_dict.keys()))
-    print(f"Total number of target proteins: {len(all_targets)}")
+    logger.info(f"Total number of target proteins: {len(all_targets)}")
     with open(f'{out_prefix.replace(".tsv","_targets.tsv")}', 'w') as f:
         for target in all_targets:
             f.write(f"{target}\n")
@@ -146,6 +192,9 @@ def parse_inputs(argv):
                         help='Path to OBO ontology graph at a ground truth timepoint.')
     parser.add_argument('--out_prefix', default='groundtruth.tsv',
                         help='Prefix for 3 output files')
+    parser.add_argument('--log_level', default='INFO', 
+                        choices=['DEBUG', 'INFO', 'WARNING', 'ERROR'], 
+                        help='Set the logging level (default: INFO)')
     return parser.parse_args(argv)
 
     # python3 -m democafa.groundtruth.classify_ground_truth -ak data/processed/cafa5/t0_terms.tsv -a2 data/processed/cafa5/t1_terms.tsv 
@@ -156,14 +205,26 @@ def parse_inputs(argv):
     
 def main():
     args = parse_inputs(sys.argv[1:])
-    wrapper_ground_truth(
-        annot_known=args.annot_known,
-        annot2=args.annot2,
-        query_file=args.query_file,
-        graph=args.graph,
-        graph2=args.graph2,
-        out_prefix=args.out_prefix        
-    )
+    
+    # Set logging level based on command line argument
+    logger.setLevel(getattr(logging, args.log_level))
+    for handler in logger.handlers:
+        handler.setLevel(getattr(logging, args.log_level))
+    
+    logger.info(f"Arguments: {vars(args)}")
+    
+    try:
+        wrapper_ground_truth(
+            annot_known=args.annot_known,
+            annot2=args.annot2,
+            query_file=args.query_file,
+            graph=args.graph,
+            graph2=args.graph2,
+            out_prefix=args.out_prefix        
+        )
+    except Exception as e:
+        logger.error(f"Error in classify_ground_truth script: {str(e)}")
+        raise
     
 if __name__ == "__main__":
     main()

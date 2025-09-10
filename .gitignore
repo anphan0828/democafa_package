@@ -1,6 +1,6 @@
 data/
 00notes
-*.pyc
-*.log
+**/*.pyc
+**/*.log
 
 

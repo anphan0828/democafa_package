@@ -27,6 +27,7 @@ ontology_graph = '/work/idoerg/ahphan/democafa_package/data/cafa6/raw/go-basic-2
 taxon_path = '/work/idoerg/ahphan/democafa_package/data/raw/testsuperset-taxon-list.tsv'
 output_file = '/work/idoerg/ahphan/democafa_package/data/cafa6/processed/terms_20250610.tsv'
 swissprot_fasta = '/work/idoerg/ahphan/democafa_package/data/cafa6/raw/uniprot_sprot.fasta.2025.03.gz'
+holdout_groundtruth = '/work/idoerg/ahphan/democafa_package/data/cafa6/processed/leaf_20250610_targets.tsv'
 
 def process_tsv(input_file, ontology_graph, output_file, testsuperset):
     """
@@ -175,10 +176,8 @@ def read_fasta_proteins(fasta_file: str):
     return fasta_proteins
 
 # gained_entries = process_tsv(input_file, ontology_graph, output_file)
-groundtruth_df = pd.read_csv('/work/idoerg/ahphan/democafa_package/data/temp/groundtruth_targets.tsv', sep='\t', header=None)
-gained_entries = groundtruth_df.iloc[:,0].tolist()
-gained_taxon = fetch_taxonomy(gained_entries)
-gained_taxon_count = Counter(gained_taxon.values())
+# groundtruth_df = pd.read_csv('/work/idoerg/ahphan/democafa_package/data/temp/groundtruth_targets.tsv', sep='\t', header=None)
+
 
 # Comparing with 90-species set
 taxon_file =  pd.read_csv(taxon_path, header=0, sep='\t', encoding='ISO-8859-1')
@@ -186,14 +185,42 @@ selected_taxon = [str(taxon_id) for taxon_id in set(taxon_file.iloc[:,0].tolist(
 fasta_proteins = read_fasta_proteins('/work/idoerg/ahphan/democafa_package/data/cafa6/raw/uniprot_sprot_taxid_2759.fasta.gz')
 # len(set.difference(set(selected_taxon), set(fasta_proteins.values())))
 
-# Getting taxonomy names from taxon_id
+# Getting taxonomy names from taxon_id, compare with CAFA5 and write to file
+taxon_new_file = '/work/idoerg/ahphan/democafa_package/data/cafa6/raw/selected-taxon-list.tsv'
+taxon_new_set = set()
 print("Fetching scientific names for proteins that are not in the Eukaryotes but in 90-species")
-for taxid in set.difference(set(selected_taxon), set(fasta_proteins.values())):
-    s = Entrez.esummary(db="taxonomy", id=taxid, retmode="xml")
-    result = Entrez.read(s)
-    print(taxid, result[0]['ScientificName'])
-    
-    
+with open(taxon_new_file,'w') as f:
+    f.write("ID\tSpecies\n")
+    f.write("2759\tEukaryota\n") # add all eukaryotes
+    taxon_new_set.add('2759')
+    for taxid in set.difference(set(selected_taxon), set(fasta_proteins.values())):
+        s = Entrez.esummary(db="taxonomy", id=taxid, retmode="xml")
+        result = Entrez.read(s)
+        print(taxid, result[0]['ScientificName'])
+        f.write(f"{taxid}\t{result[0]['ScientificName']}\n")
+        taxon_new_set.add(taxid)
+
+# Checking hold out ground truth for any additional taxon
+groundtruth_df = pd.read_csv(holdout_groundtruth, sep='\t', header=None)
+gained_entries = groundtruth_df.iloc[:,0].tolist()
+gained_taxon = fetch_taxonomy(gained_entries)
+gained_taxon_count = Counter(gained_taxon.values())
+gained_taxon_not_eukaryotes = {(name,id):count for (name,id),count in gained_taxon_count.items() if id not in set(fasta_proteins.values())}
+with open(taxon_new_file,'a') as f:
+    for (name,taxid), count in gained_taxon_not_eukaryotes.items():
+        s = Entrez.esummary(db="taxonomy", id=taxid, retmode="xml")
+        result = Entrez.read(s)
+        print(taxid, result[0]['ScientificName'])
+        if taxid not in taxon_new_set:
+            f.write(f"{taxid}\t{result[0]['ScientificName']}\n")
+            taxon_new_set.add(taxid)
+
+# For getting most gained taxa, use groundtruth of 2-year rather than hold out ground truth
+groundtruth_df = pd.read_csv('/work/idoerg/ahphan/democafa_package/data/temp/groundtruth_targets.tsv', sep='\t', header=None)
+gained_entries = groundtruth_df.iloc[:,0].tolist()
+gained_taxon = fetch_taxonomy(gained_entries)
+gained_taxon_count = Counter(gained_taxon.values())
+gained_taxon_not_eukaryotes = {(name,id):count for (name,id),count in gained_taxon_count.items() if id not in set(fasta_proteins.values())}
 new_taxon = {name: id for (name, id) in gained_taxon.values() if id not in selected_taxon}
 gained_taxon_not_eukaryotes = {(name,id):count for (name,id),count in gained_taxon_count.items() if id not in set(fasta_proteins.values())}
 most_common_gained_taxon = Counter(gained_taxon_not_eukaryotes).most_common(20)
