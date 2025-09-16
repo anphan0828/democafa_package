@@ -312,7 +312,8 @@ def propagate_and_ia(terms_file, graph, tsv_propagated, matrix_propagated=None, 
             cp.dump((pidx3, tidx3), f)    
                     
     # # Count term instances with respect to aspect for IA calculation
-    # logger.debug('Counting Terms')
+    # TODO: this step is too slow, need to optimize
+    logger.info('Counting Terms')
     if output_tsv:
         aspect_counts = dict()
         aspect_terms = dict()
@@ -345,7 +346,6 @@ def propagate_and_ia(terms_file, graph, tsv_propagated, matrix_propagated=None, 
         # since we are indexing by column to compute IA, 
         # let's convert to Compressed Sparse Column format
         sp_matrix = {aspect:dok.tocsc() for aspect, dok in aspect_counts.items()}
-        # TODO: new ia calculation is wrong, the roots have ia > 0 because proteins have to be within aspect
         logger.info('Computing Information Accretion')
         aspect_ia = {aspect: {t:0 for t in aspect_terms[aspect]} for aspect in aspect_terms.keys()}
         for aspect, subontology in subontologies.items():
@@ -365,3 +365,133 @@ def propagate_and_ia(terms_file, graph, tsv_propagated, matrix_propagated=None, 
         ia_df[['term','ia']].to_csv(output_tsv, header=None, sep='\t', index=False)
 
 
+def propagate_and_ia_optimized(terms_file, graph, tsv_propagated, matrix_propagated=None, matrix_indices=None, output_tsv=None):
+    # load ontology graph and get three subontologies
+    ontology_graph = clean_ontology_edges(obonet.read_obo(graph))
+    roots = {'P': 'GO:0008150', 'C': 'GO:0005575', 'F': 'GO:0003674'}
+    subontologies = {aspect: fetch_aspect(ontology_graph, roots[aspect]) for aspect in roots} 
+    
+    # these terms should be propagated using the same ontology, otherwise IA may be negative
+    annotation_df = pd.read_csv(terms_file, sep='\t')
+    logger.info('Propagating Terms')
+    annotation_df = propagate_terms(annotation_df, subontologies)
+    
+    if tsv_propagated:
+        logger.info(f'Saving propagated terms to {tsv_propagated}')
+        annotation_df.to_csv(tsv_propagated, sep='\t', index=False)
+    ## Approach 1: Use pd.pivot_table (20sec for 900k annotations)
+    # matrix1, pidx1, tidx1, time1 = approach1_pivot_table(annotation_df)
+    
+    ## Approach 2: use Counter in term_counts function (7sec for 900k annotations)       
+    # matrix2, pidx2, tidx2, time2 = approach2_term_counts(annotation_df)
+    
+    ## Approach 3: create csr directly from coordinates
+    matrix3, pidx3, tidx3, time3 = sparse_matrix_and_indices(annotation_df)
+    
+    if matrix_propagated and matrix_indices:
+        logger.info(f'Saving to file {matrix_propagated}')
+        save_npz(matrix_propagated, matrix3.tocsr())
+        with open(matrix_indices, 'wb') as f:
+            cp.dump((pidx3, tidx3), f)    
+                    
+    # # Count term instances with respect to aspect for IA calculation
+    logger.info('Counting Terms')
+    if output_tsv:
+        logger.info('Computing Information Accretion (Memory Efficient)')
+        
+        ia_results = []
+        
+        for aspect, subontology in subontologies.items():
+            logger.info(f'Processing aspect {aspect}')
+            
+            # Get aspect-specific data
+            aspect_df = annotation_df[annotation_df.aspect == aspect].copy()
+            aspect_proteins = sorted(aspect_df['EntryID'].unique())
+            
+            # Get ALL terms in this aspect of the ontology (not just annotated ones)
+            all_aspect_terms = sorted(subontology.nodes)
+            annotated_terms = set(aspect_df['term']) if not aspect_df.empty else set()
+            logger.info(f'  Aspect {aspect}: {len(all_aspect_terms)} total terms, {len(annotated_terms)} annotated')
+            
+            if not aspect_proteins:
+                # No proteins annotated in this aspect - all terms get IA = 0.0
+                for term in all_aspect_terms:
+                    ia_results.append({'term': term, 'ia': 0.0, 'aspect': aspect})
+                continue
+            
+            # Build aspect-specific matrix directly
+            annotated_terms_list = sorted(annotated_terms)
+            protein_to_idx = {p: i for i, p in enumerate(aspect_proteins)}
+            term_to_idx = {t: i for i, t in enumerate(annotated_terms_list)}
+            
+            # Create matrix for this aspect only
+            rows = [protein_to_idx[p] for p in aspect_df['EntryID']]
+            cols = [term_to_idx[t] for t in aspect_df['term']]
+            data = np.ones(len(rows), dtype=bool)
+            
+            aspect_matrix = csr_matrix(
+                (data, (rows, cols)), 
+                shape=(len(aspect_proteins), len(annotated_terms_list))
+            ).tocsc()
+            
+            # Add dummy row
+            dummy_row = csr_matrix(np.ones((1, len(annotated_terms_list)), dtype=bool))
+            aspect_matrix_with_dummy = vstack([dummy_row, aspect_matrix]).tocsc()
+            
+           # Compute IA for ALL terms in the ontology
+            for term in all_aspect_terms:
+                if term in annotated_terms:
+                    # Term has annotations - compute IA normally
+                    ia_value = calc_ia_direct(term, aspect_matrix_with_dummy, subontology, term_to_idx)
+                else:
+                    # Term has no annotations - IA = 0.0
+                    ia_value = 0.0        
+                ia_results.append({'term': term, 'ia': ia_value, 'aspect': aspect})
+
+        # Create final DataFrame
+        ia_df = pd.DataFrame(ia_results)
+        
+        # All IA must be non-negative
+        assert ia_df['ia'].min() >= 0
+        
+        # Verify we have all terms from the ontology
+        total_ontology_terms = sum(len(subont.nodes) for subont in subontologies.values())
+        logger.info(f'Total terms in ontology: {total_ontology_terms}')
+        logger.info(f'Total terms in IA results: {len(ia_df)}')
+        
+        # Save to file
+        logger.info(f'Saving to file {output_tsv}')
+        ia_df[['term', 'ia']].to_csv(output_tsv, header=None, sep='\t', index=False)
+
+
+def calc_ia_direct(term, matrix, ontology, term_indices):
+    """Direct IA calculation with aspect-specific matrix"""
+    parents = list(nx.descendants_at_distance(ontology, term, 1))
+    
+    if not parents:
+        return 0.0
+    
+    # Check if all parents are in our term indices
+    parent_indices = []
+    for parent in parents:
+        if parent in term_indices:
+            parent_indices.append(term_indices[parent])
+        else:
+            return 0.0  # Can't compute IA if parents are missing
+    
+    term_idx = term_indices[term]
+    
+    # Count proteins with term
+    prots_with_term = matrix[:, term_idx].sum()
+    
+    # Count proteins with all parents
+    if len(parent_indices) == 1:
+        prots_with_parents = matrix[:, parent_indices[0]].sum()
+    else:
+        parent_matrix = matrix[:, parent_indices]
+        prots_with_parents = (parent_matrix.sum(axis=1) == len(parents)).sum()
+    
+    if prots_with_term == prots_with_parents or prots_with_parents == 0:
+        return 0.0
+    
+    return -np.log2(prots_with_term / prots_with_parents)        

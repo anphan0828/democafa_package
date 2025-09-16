@@ -43,6 +43,7 @@ def download_fasta_by_taxon(taxon, output_file):
     url = f"https://rest.uniprot.org/uniprotkb/search?format=fasta&query={taxon_query}+AND+%28reviewed%3Atrue%29&size=500"
     print(f"Downloading FASTA sequences for taxon ID {taxon_id}...")
 
+    # Bug: 2 sequences merged into 1 header, total number does not match expected total
     # progress = 0
     # with gzip.open(output_file, 'wt') as f:
     #     for batch, total in get_batch(url):

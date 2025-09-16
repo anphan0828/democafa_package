@@ -36,9 +36,13 @@ if config:
     BASELINE_PATHS = config.get('baseline_paths', {})
     for key in BASELINE_PATHS:
         BASELINE_PATHS[key] = os.path.join(DATA_DIR, BASELINE_PATHS[key])
+    GROUNDTRUTH_PATHS = config.get('groundtruth_paths', {})
+    for key in GROUNDTRUTH_PATHS:
+        GROUNDTRUTH_PATHS[key] = os.path.join(DATA_DIR, GROUNDTRUTH_PATHS[key])
 else:
     VERSIONS = {}
     GO_CODES = {}
     RAW_FILE_PATHS = {}
-    PROCESSED_PATHS = {}
+    PROCESSED_FILE_PATHS = {}
     RELEASE_PATHS = {}
+    GROUNDTRUTH_PATHS = {}

@@ -31,18 +31,41 @@ logger.setLevel(logging.INFO)
 # Prevent messages from propagating to the root logger (so multiple loggers can coexist)
 logger.propagate = False
 
-# Create file handler
-log_dir = 'logs'
-os.makedirs(log_dir, exist_ok=True)  # Create logs directory if it doesn't exist
-log_filename = os.path.join(log_dir, datetime.now().strftime('classify_ground_truth_%Y%m%d_%H%M%S.log'))
-file_handler = logging.FileHandler(log_filename)
-file_handler.setLevel(logging.INFO)
-formatter = logging.Formatter(
-    '%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    datefmt='%Y-%m-%d %H:%M:%S'
-)
-file_handler.setFormatter(formatter)
-logger.addHandler(file_handler)
+def setup_logging(use_file_handler=True, log_level='INFO'):
+    """
+    Set up logging configuration.
+    
+    Args:
+        use_file_handler (bool): If True, log to file. If False, log to console.
+        log_level (str): Logging level ('DEBUG', 'INFO', 'WARNING', 'ERROR')
+    """
+    # Clear any existing handlers
+    for handler in logger.handlers[:]:
+        logger.removeHandler(handler)
+    
+    # Set logging level
+    logger.setLevel(getattr(logging, log_level))
+    
+    if use_file_handler:
+        # Create file handler
+        log_dir = 'logs'
+        os.makedirs(log_dir, exist_ok=True)  # Create logs directory if it doesn't exist
+        log_filename = os.path.join(log_dir, datetime.now().strftime('classify_ground_truth_%Y%m%d_%H%M%S.log'))
+        handler = logging.FileHandler(log_filename)
+    else:
+        # Create console handler
+        handler = logging.StreamHandler(sys.stdout)
+    
+    handler.setLevel(getattr(logging, log_level))
+    formatter = logging.Formatter(
+        '%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+        datefmt='%Y-%m-%d %H:%M:%S'
+    )
+    handler.setFormatter(formatter)
+    logger.addHandler(handler)
+
+# When imported as a module, set up console logging by default
+setup_logging(use_file_handler=False)
 
 
 def wrapper_ground_truth(annot_known, annot2, query_file, graph, graph2, out_prefix):

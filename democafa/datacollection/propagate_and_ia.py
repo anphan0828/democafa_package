@@ -2,7 +2,7 @@
 
 import sys
 import argparse
-from democafa.utils.ontology import propagate_and_ia
+from democafa.utils.ontology import propagate_and_ia_optimized
 
 def parse_args(args):
     parser = argparse.ArgumentParser(description='Propagate and Compute Information Accretion of GO annotations')
@@ -29,7 +29,7 @@ def parse_args(args):
     
 def main():    
     args = parse_args(sys.argv[1:])
-    propagate_and_ia(
+    propagate_and_ia_optimized(
         terms_file = args.terms,
         graph = args.graph,
         tsv_propagated = args.tsv_propagated,

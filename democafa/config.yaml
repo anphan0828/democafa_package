@@ -1,19 +1,19 @@
 versions:
     swissprot_date: "2025-06-18"
     swissprot.tar.gz: "https://ftp.uniprot.org/pub/databases/uniprot/current_release/knowledgebase/complete/uniprot_sprot.fasta.gz"
-    uniprot_goa.gaf.gz.: "https://ftp.ebi.ac.uk/pub/databases/GO/goa/UNIPROT/goa_uniprot_all.gaf.gz"
+    goa_uniprot_all.gaf.gz.: "https://ftp.ebi.ac.uk/pub/databases/GO/goa/UNIPROT/goa_uniprot_all.gaf.gz"
     go-basic.obo: "https://release.geneontology.org/2025-06-01/ontology/go-basic.obo"
 
 t0_versions:
     swissprot_date: "NA"
     swissprot.tar.gz: "NA"
-    uniprot_goa.gaf.gz.: "NA"
+    goa_uniprot_all.gaf.gz.: "NA"
     go-basic.obo: "NA"
     
 t1_versions:
     swissprot_date: "NA"
     swissprot.tar.gz: "NA"
-    uniprot_goa.gaf.gz.: "NA"
+    goa_uniprot_all.gaf.gz.: "NA"
     go-basic.obo: "NA"
         
 go_codes:
@@ -28,6 +28,8 @@ other_paths:
     prott5_model: "/work/idoerg/ahphan/.cache/huggingface/"    
     
 raw_file_paths:
+    taxon_list: "raw/selected-taxon-list.tsv"
+    uniprot_selected_fasta: "raw/uniprot_sprot_selected.fasta.gz"
     swissprot_fasta: "raw/uniprot_sprot.fasta.2025.03.gz"
     uniprot_goa: "raw/goa_uniprot_all.gaf.226.gz"
     obo: "raw/go-basic-20250601.obo"
@@ -39,15 +41,16 @@ raw_file_paths:
     t1_obo: "NA"
 
 processed_file_paths:
-    goa_uniprot_filtered: "processed/goa_uniprot_filtered.gaf.gz"
+    uniprot_goa_filtered: "processed/goa_uniprot_filtered.gaf.gz"
     train_terms: "processed/train_terms.tsv"
     train_sequences: "processed/train_sequences.fasta"
     train_taxonomy: "processed/train_taxonomy.tsv"
     test_sequences: "processed/test_superset.fasta"
     train_terms_propagated: "processed/train_terms_propagated.tsv"
-    t0_goa_uniprot_filtered: "processed/t0_goa_uniprot_filtered.gaf.gz"
+    train_ia: "processed/IA.tsv"
+    t0_uniprot_goa_filtered: "processed/t0_goa_uniprot_filtered.gaf.gz"
     t0_terms: "processed/t0_terms.tsv"
-    t1_goa_uniprot_filtered: "processed/t1_goa_uniprot_filtered.gaf.gz"
+    t1_uniprot_goa_filtered: "processed/t1_goa_uniprot_filtered.gaf.gz"
     t1_terms: "processed/t1_terms.tsv"
 
 baseline_paths:
@@ -58,32 +61,22 @@ baseline_paths:
     output_blast: "processed/blast_results.tsv"
     output_prott5: "processed/prott5_results_norm.tsv"
 
-processed_paths:
-    train_terms: "processed/train_terms.tsv"
-    train_sequences: "processed/train_sequences.fasta"
-    train_matrix: "processed/train_terms_propagated.npz"
-    train_taxonomy: "processed/train_taxonomy.tsv"
-    matrix_indices: "processed/train_terms_indices.pkl"
-    train_ia: "processed/ia.tsv"
-    test_sequences: "processed/test_superset.fasta"
-    test_sequences_all: "processed/test_superset_all.fasta"
-    test_taxonomy: "processed/testsuperset-taxon-list.tsv"
-    output_blast: "processed/blast_results.tsv"
-    output_prott5_raw: "processed/prott5_results.tsv"
-    output_prott5: "processed/prott5_results_norm.tsv"
-    baseline_goa_nonexp: "processed/goa_nonexp_baseline.tsv.gz"
-    baseline_naive: "processed/naive_baseline.tsv.gz"
-    baseline_blast: "processed/blast_baseline.tsv.gz"
-    baseline_prott5: "processed/prott5_baseline.tsv.gz"
-    t0_baseline_goa_nonexp: "processed/t0_goa_nonexp_baseline.tsv.gz"
-    t0_terms: "processed/t0_terms.tsv"
-    t1_terms: "processed/t1_terms.tsv"
-    t1_ground_truth: "processed/t1_ground_truth.tsv"
+groundtruth_paths:
+    raw_terms: "raw/GO_annotations_CAFA_20230610.tsv"
+    processed_terms: "groundtruth/leaderboard_terms.tsv"
+    processed_terms_propagated: "groundtruth/leaderboard_terms_propagated.tsv"
+    leaderboard_gt: "groundtruth/leaderboard_groundtruth.tsv"
+    t1_gt: "groundtruth/t1_groundtruth.tsv"
 
 release_paths:
+    obo: "release/go-basic.obo"
+    train_terms: "release/train_terms.tsv"
+    train_sequences: "release/train_sequences.fasta"
+    train_ia: "release/IA.tsv"
+    train_taxonomy: "release/train_taxonomy.tsv"
     test_sequences: "release/test_superset.fasta"
-    test_sequences_all: "release/test_superset_all.fasta"
-    test_taxonomy: "release/testsuperset-taxon-list.tsv"
+    sample_submission: "release/submission.csv"
+    selected_taxon: "release/selected-taxon-list.txt"
     
 external_tools:
     blast: "utils/run_blast.sh"
