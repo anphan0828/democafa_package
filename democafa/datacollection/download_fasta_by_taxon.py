@@ -3,6 +3,7 @@
 Script to download FASTA sequences from UniProt for a given taxon ID using UniProt REST API
 """
 
+import sys
 import requests
 import re
 import pandas as pd
@@ -32,27 +33,46 @@ def get_batch(batch_url):
         batch_url = get_next_link(response.headers)                
 
 
-def download_fasta_by_taxon(taxon_id, output_file):
+def download_fasta_by_taxon(taxon, output_file):
     """
     Download FASTA sequences from UniProt for a given taxon ID and save to output_file
     """
+    taxon_id = get_taxon_id_from_file(taxon)
     taxon_query = f'%28taxonomy_id%3A{"+OR+taxonomy_id%3A".join(taxon_id)}%29'
     # Get plain text response, then write to gzip file
     url = f"https://rest.uniprot.org/uniprotkb/search?format=fasta&query={taxon_query}+AND+%28reviewed%3Atrue%29&size=500"
     print(f"Downloading FASTA sequences for taxon ID {taxon_id}...")
 
-    progress = 0
-    with gzip.open(output_file, 'wt') as f:
-        for batch, total in get_batch(url):
-            lines = batch.text.splitlines()
-            if not progress:
-                print(lines[0], file=f)
-            for line in lines[1:]:
-                if line.startswith('>'):
-                    progress += 1
-                print(line, file=f)
-            print(f'{progress} / {total}')
+    # progress = 0
+    # with gzip.open(output_file, 'wt') as f:
+    #     for batch, total in get_batch(url):
+    #         lines = batch.text.splitlines()
+    #         if not progress:
+    #             print(lines[0], file=f)
+    #         for line in lines[1:]:
+    #             if line.startswith('>'):
+    #                 progress += 1
+    #             print(line, file=f)
+    #         print(f'{progress} / {total}')
+    # Fix: Make progress cumulative
+    total_progress = 0
+    expected_total = None
     
+    with gzip.open(output_file, 'wt') as f:
+        for batch_num, (batch, total) in enumerate(get_batch(url), 1):
+            if expected_total is None:
+                expected_total = int(total)
+            
+            lines = batch.text.splitlines()
+            batch_sequences = 0
+                      
+            for line in lines:
+                if line.startswith('>'):
+                    batch_sequences += 1
+                    total_progress += 1
+                print(line, file=f)
+            
+            print(f'Batch {batch_num}: +{batch_sequences} sequences | Total: {total_progress:,} / {expected_total:,}')
 
 def download_tsv_by_taxon(taxon_id, output_file):
     """
@@ -91,15 +111,20 @@ def get_taxon_id_from_file(taxon_path):
     return selected_taxon
 
 
+def parse_args(args):
+    parser = argparse.ArgumentParser(description='Download FASTA sequences from UniProt for a given taxon ID')
+    parser.add_argument('--taxon', '-t', required=True, 
+                        help='Path to the file with taxon IDs')
+    
+    parser.add_argument('--output', '-o', required=True, 
+                        help='Output file path for the downloaded FASTA sequences')
+    
+    return parser.parse_args(args)
+    
+    
 def main():
-    parser = argparse.ArgumentParser(description="Download FASTA sequences from UniProt for a given taxon ID")
-    parser.add_argument('--taxon', type=str, required=True, help='Path to the file with taxon IDs')
-    parser.add_argument('--output', type=str, required=True, help='Output file path for the downloaded FASTA sequences')
-    
-    args = parser.parse_args()
-    
-    taxon_ids = get_taxon_id_from_file(args.taxon)
-    download_fasta_by_taxon(taxon_ids, args.output)
+    args = parse_args(sys.argv[1:])
+    download_fasta_by_taxon(args.taxon, args.output)
     
 if __name__ == "__main__":
     main()
