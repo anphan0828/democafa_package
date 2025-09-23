@@ -8,6 +8,8 @@ This project is a CAFA (Critical Assessment of protein Function Annotation) impl
 
 *   **Modular Design:** Functionality is clearly separated into focused modules that can be run as separate modules or in the wrapper main script.
 *   **Configuration:** File versions and data sources are defined in a config file and can be used across the package.
+*   **Optimization:** Filtering for large files, UniProt streaming download, matrix calculation for Information Accretion, chunk processing are implemented to increase efficiency
+*   **Logging:** Logging is included and can be stored to logs folder for future reference
 
 ## Project Structure
 ### Directory Breakdown
@@ -112,7 +114,5 @@ python3 -m democafa.baselines.goa_nonexp <provide arguments as needed>
     
     
 # TODO:
-- Add example data
 - Add unit test
 - Proteins will be removed from evaluation set if their sequences changed between release and evaluation
-- Add rerun argument to each of the script
