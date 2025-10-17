@@ -92,12 +92,12 @@ def read_fasta_proteins(fasta_file: str, taxon):
     logger.info(f"Selected taxon: {selected_taxon}")
     
     tax_pattern = re.compile(r"OX=(\d+)")
-    species_pattern = re.compile(r"OS=([^O]+)")
+    species_pattern = re.compile(r"OS=([^=]+?)\s+OX=")  # Match species name between OS= and OX=
     fasta_proteins = {}
     # species = {}
     
     seq_count = 0
-    
+    tax_dict = {}
     # Process gzipped fasta file to get all SwissProt proteins
     with gzip.open(fasta_file, "rt") as gz_file:
         for record in SeqIO.parse(gz_file, 'fasta'):
@@ -107,16 +107,18 @@ def read_fasta_proteins(fasta_file: str, taxon):
             # Extract taxonomy ID using regex
             tax_match = tax_pattern.search(record.description)
             tax_id = tax_match.group(1) if tax_match else "N/A"
+            if tax_id != "N/A":
+                species_match = species_pattern.search(record.description)
+                species_name = species_match.group(1) if species_match else "N/A"
+                tax_dict[tax_id] = species_name
                 
-            # species_match = species_pattern.search(record.description)
-            # species_name = species_match.group(1) if species_match else "N/A"
             if selected_taxon is None or tax_id in selected_taxon:
                 seq_count += 1
-                fasta_proteins[entry_id] = [str(record.id), str(record.description), str(record.seq), tax_id]
+                fasta_proteins[entry_id] = [str(record.id), str(record.description), str(record.seq), tax_id, tax_dict[tax_id]]
             # if species_name != "N/A":
                 # species[species_name] = tax_id
-    logger.info(f"Total sequences processed: {seq_count}")
-            
+    logger.info(f"Total sequences selected: {seq_count}")
+
     return fasta_proteins
 
 
@@ -157,7 +159,7 @@ def write_missing_aspects_fasta(fasta_proteins, complete_proteins, trembl_sequen
     #         print(f"Release version {uniprot_api_version} not found.")
 
 
-def write_fasta(fasta_proteins, trembl_sequences, annotated_proteins_to_include, output_file, num_queries, uniprot_api_version=None):
+def write_fasta(fasta_proteins, trembl_sequences, annotated_proteins_to_include, output_file, num_queries, out_taxonomy, description=True, uniprot_api_version=None):
     """
     Write FASTA file all proteins with or without missing GO aspects (for partial knowledge evaluation).
     
@@ -166,27 +168,46 @@ def write_fasta(fasta_proteins, trembl_sequences, annotated_proteins_to_include,
         trembl_proteins: Set of TrEMBL proteins with missing aspects
         uniprot_api_version: UniProt release version to retrieve TrEMBL sequences
         output_file: Path to output FASTA file
+        num_queries: Number of queries to include in the test superset (for test data)
+        description: Whether to include full FASTA descriptions or just accession and taxonomy ID
     """
+    selected_taxon = dict()
+    if description:
+        logger.info("Including full FASTA descriptions.")
     if num_queries is None:
         with open(output_file, 'w') as fasta_out:
             for protein_id in fasta_proteins:
-                seq_record = SeqRecord(Seq(fasta_proteins[protein_id][2]), id=fasta_proteins[protein_id][0], description=fasta_proteins[protein_id][1])
-                # values = fasta_proteins[protein_id]
-                # f.write(f'>{protein_id}\t{values[1]}\n{values[0]}\n')
+                # full FASTA header
+                if description:
+                    seq_record = SeqRecord(Seq(fasta_proteins[protein_id][2]), id=fasta_proteins[protein_id][0], description=fasta_proteins[protein_id][1])
+                # only accession id and taxonomy id
+                else:
+                    seq_record = SeqRecord(Seq(fasta_proteins[protein_id][2]), id=f'{fasta_proteins[protein_id][0].split("|")[1]} {fasta_proteins[protein_id][3]}', description="")
                 SeqIO.write(seq_record, fasta_out, "fasta")
+                selected_taxon[fasta_proteins[protein_id][3]] = fasta_proteins[protein_id][4]
         num_selected = len(fasta_proteins)
     else:
         num_queries = int(num_queries)
         count=0
         with open(output_file, 'w') as fasta_out:
             for protein_id in annotated_proteins_to_include:
-                seq_record = SeqRecord(Seq(fasta_proteins[protein_id][2]), id=fasta_proteins[protein_id][0], description=fasta_proteins[protein_id][1])
+                # full FASTA header
+                if description:
+                    seq_record = SeqRecord(Seq(fasta_proteins[protein_id][2]), id=fasta_proteins[protein_id][0], description=fasta_proteins[protein_id][1])
+                # only accession id and taxonomy id
+                else:
+                    seq_record = SeqRecord(Seq(fasta_proteins[protein_id][2]), id=f'{fasta_proteins[protein_id][0].split("|")[1]} {fasta_proteins[protein_id][3]}', description="")
                 SeqIO.write(seq_record, fasta_out, "fasta")
                 count += 1
             for protein_id in fasta_proteins:
                 if protein_id in annotated_proteins_to_include:
                     continue
-                seq_record = SeqRecord(Seq(fasta_proteins[protein_id][2]), id=fasta_proteins[protein_id][0], description=fasta_proteins[protein_id][1])
+                # full FASTA header
+                if description:
+                    seq_record = SeqRecord(Seq(fasta_proteins[protein_id][2]), id=fasta_proteins[protein_id][0], description=fasta_proteins[protein_id][1])
+                # only accession id and taxonomy id
+                else:
+                    seq_record = SeqRecord(Seq(fasta_proteins[protein_id][2]), id=f'{fasta_proteins[protein_id][0].split("|")[1]} {fasta_proteins[protein_id][3]}', description="")
                 SeqIO.write(seq_record, fasta_out, "fasta")
                 count += 1
                 if count >= num_queries:
@@ -196,13 +217,18 @@ def write_fasta(fasta_proteins, trembl_sequences, annotated_proteins_to_include,
     # with open(output_file.replace('.fasta', '_trembl.txt'), 'w') as trembl_out:
     #     for protein_id in trembl_proteins:
     #         trembl_out.write(f'{protein_id}\n')
-    # TODO: remove proteins that only have protein binding term
     
     with open(output_file, 'a') as fasta_out:
         for protein_id, (header, sequence) in trembl_sequences.items():
             seq_record = SeqRecord(Seq(sequence), id=header, description="")
             SeqIO.write(seq_record, fasta_out, "fasta")
     logger.info(f"Total sequences in test superset: {num_selected + len(trembl_sequences)}")
+    
+    with open(out_taxonomy, 'w') as tax_out:
+        tax_out.write('ID\tSpecies\n')
+        for tax_id, species_name in selected_taxon.items():
+            tax_out.write(f'{tax_id}\t{species_name}\n')
+    logger.info(f"Total taxa in test superset: {len(selected_taxon)}")
     # print(f"Appending {len(trembl_proteins)} TrEMBL proteins to {output_file}...")
     # if uniprot_api_version is None:
     #     for protein_id in trembl_proteins:
@@ -411,7 +437,7 @@ def create_train_sequences(proteins_with_terms, sequences_gzfile, trembl_sequenc
     logger.info(f"Total sequences in training data: {trembl_seq_count + seq_count} proteins in {len(all_taxid)} taxa")
     
 
-def create_test_set(terms_file, sequences_gzfile, out_fasta, train_out_fasta, train_out_taxonomy, include_all, num_queries=None, uniprot_api_version=None, in_taxonomy=None):
+def create_test_set(terms_file, sequences_gzfile, out_fasta, train_out_fasta, train_out_taxonomy, test_out_taxonomy, include_all, num_queries=None, uniprot_api_version=None, in_taxonomy=None):
     # Read GO terms data
     logger.info("Reading GO terms data...")
     all_proteins, complete_proteins = get_proteins_with_all_aspects(terms_file)
@@ -443,11 +469,12 @@ def create_test_set(terms_file, sequences_gzfile, out_fasta, train_out_fasta, tr
         annotated_proteins_to_include = set.intersection(all_proteins, set(fasta_proteins.keys()))
     else:
         annotated_proteins_to_include = set()
+        
     # Append TrEMBL proteins to fasta file of test_superset_all.fasta and train_sequences.fasta
     if include_all: # including partial knowledge proteins
-        write_fasta(fasta_proteins, trembl_sequences, annotated_proteins_to_include, out_fasta, num_queries, uniprot_api_version)
+        write_fasta(fasta_proteins, trembl_sequences, annotated_proteins_to_include, out_fasta, num_queries, test_out_taxonomy, description=False)
     else: # only include proteins missing aspects (no knowledge and limited knowledge)
-        write_missing_aspects_fasta(fasta_proteins, complete_proteins, trembl_proteins, out_fasta, num_queries, uniprot_api_version)
+        write_missing_aspects_fasta(fasta_proteins, complete_proteins, trembl_proteins, out_fasta, num_queries)
     # write_species(species, in_taxonomy)
     
 
@@ -469,6 +496,8 @@ def parse_inputs(args):
                         help='Include all proteins in the test superset')
     parser.add_argument('--num_queries', '-n', default=None,
                         help='Number of queries to include in the test superset')
+    parser.add_argument('--test_out_taxonomy', required=True,
+                        help='Path to test superset taxonomy mapping file')
     parser.add_argument('--uniprot_api', '-u', required=False,
                         help='UniProt API version to retrieve TrEMBL sequences')
     parser.add_argument('--in_taxonomy', required=False, default=None)
@@ -500,6 +529,7 @@ def main():
         train_out_taxonomy=args.train_out_taxonomy,
         include_all=True,
         num_queries=args.num_queries,
+        test_out_taxonomy=args.test_out_taxonomy,
         uniprot_api_version=args.uniprot_api,
         in_taxonomy=args.in_taxonomy
     )

@@ -58,11 +58,20 @@ def process_tsv(input_file, ontology_graph):
     # annotation_df = propagate_terms(annotation_df, subontologies) 
     binding_terms = set(nx.descendants(subontologies['F'],'GO:0005515'))
     binding_terms.add('GO:0005515')
-    no_binding = annotation_df[~annotation_df['term'].isin(binding_terms)]
-    binding_only = set.difference(set(annotation_df['EntryID']), set(no_binding['EntryID']))
-    print(f"Removed {len(binding_only)} proteins with only protein-binding terms.")
-    annotation_df = annotation_df[~annotation_df['EntryID'].isin(binding_only)]
+    # no_binding = annotation_df[(~annotation_df['term'].isin(binding_terms)) & (annotation_df['aspect']=='F')]
+    # binding_only = set.difference(set(annotation_df['EntryID']), set(no_binding['EntryID']))
+    # print(f"Removed {len(binding_only)} proteins with only protein-binding terms.")
+    # annotation_df = annotation_df[~annotation_df['EntryID'].isin(binding_only)]
     
+    annotated_F_proteins = set(annotation_df[annotation_df['aspect']=='F']['EntryID'])
+    not_binding_only_proteins = set(annotation_df[(annotation_df['EntryID'].isin(annotated_F_proteins)) & 
+                                                  (~annotation_df['term'].isin(binding_terms)) & 
+                                                  (annotation_df['aspect']=='F')]['EntryID']) # these proteins have other MFO annotations
+    binding_df = annotation_df[(annotation_df['EntryID'].isin(annotated_F_proteins - not_binding_only_proteins)) & 
+                               (annotation_df['aspect']=='F')] # these annotations are protein-binding only
+    # Remove rows in binding_df from annotation_df
+    annotation_df = annotation_df[~annotation_df.index.isin(binding_df.index)]
+                               
     # # Remove TrEMBL proteins
     # fasta_proteins = read_fasta_proteins(swissprot_fasta)
     # trembl_gain_proteins = set.difference(set(annotation_df['EntryID']), set(fasta_proteins.keys()))
