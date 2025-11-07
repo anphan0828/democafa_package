@@ -294,10 +294,8 @@ def parse_inputs(argv):
 def main():
     args = parse_inputs(sys.argv[1:])
     
-    # Set logging level based on command line argument
-    logger.setLevel(getattr(logging, args.log_level))
-    for handler in logger.handlers:
-        handler.setLevel(getattr(logging, args.log_level))
+    # Set up file logging when running as a script
+    setup_logging(use_file_handler=True, log_level=args.log_level)
     
     logger.info(f"Arguments: {vars(args)}")
     
