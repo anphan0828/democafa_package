@@ -20,7 +20,7 @@ import sys
 import time
 from pathlib import Path
 from typing import Dict, Iterator, Tuple, TextIO, Union
-
+from Bio.Seq import Seq
 from Bio import SeqIO
 from Bio.SeqRecord import SeqRecord
 from tqdm import tqdm
@@ -203,6 +203,7 @@ def compare_sequences_fast(file1: Union[str, Path], file2: Union[str, Path],
     # Find differences
     print("Finding differences...")
     differences = []
+    common = []
     
     # Create uniprot ID mapping for file2
     file2_uniprot_ids = {k.split("|")[1] if "|" in k else k: k for k in file2_seqs.keys()}
@@ -216,16 +217,22 @@ def compare_sequences_fast(file1: Union[str, Path], file2: Union[str, Path],
             if file1_seqs[seq_id] != file2_seqs[seq_id]:
                 # Sequences differ
                 differences.append((seq_id, file1_seqs[seq_id], file2_seqs[seq_id], 'different', seq_id))
+            else:
+                # Otherwise, sequence is common (same id and same sequence)
+                common.append((seq_id, file1_seqs[seq_id]))
         # Uniprot id match but full id different
         elif uniprot_id in file2_uniprot_ids:
             file2_full_id = file2_uniprot_ids[uniprot_id]
             if file1_seqs[seq_id] != file2_seqs[file2_full_id]:
                 differences.append((seq_id, file1_seqs[seq_id], file2_seqs[file2_full_id], 'different', file2_full_id))
             else:
+                # Same sequence, different gene name, should be in common file with id from file1
                 differences.append((seq_id, file1_seqs[seq_id], file2_seqs[file2_full_id], 'same sequence different gene name', file2_full_id))
+                common.append((seq_id, file1_seqs[seq_id]))
         # Uniprot id and full id different, Sequence only in file1
-        else:
+        elif uniprot_id not in file2_uniprot_ids:
             differences.append((seq_id, file1_seqs[seq_id], None, 'file1_only', None))
+
     
     # Check sequences only in file2
     file1_uniprot_ids = {k.split("|")[1] if "|" in k else k for k in file1_seqs.keys()}
@@ -235,6 +242,12 @@ def compare_sequences_fast(file1: Union[str, Path], file2: Union[str, Path],
         if seq_id not in file1_seqs and uniprot_id not in file1_uniprot_ids:
             differences.append((seq_id, None, file2_seqs[seq_id], 'file2_only', None))
     
+    # Write common sequences (that are not in differences) 
+    common_output_file = output_file.replace('.fasta', '_common.fasta')
+    print(f"Writing {len(common):,} common sequences to {common_output_file}")
+    with open(common_output_file, 'w') as handle:
+        SeqIO.write([SeqRecord(seq=Seq(seq), id=seq_id, description="") for seq_id, seq in common], handle, "fasta")
+
     # Write differences
     write_differences(differences, output_file, file1, file2)
 
@@ -258,40 +271,32 @@ def write_differences(differences: list, output_file: Union[str, Path],
         if diff_type == 'different':
             # Write both versions
             record1 = SeqRecord(
-                seq=seq1, 
+                seq=Seq(seq1), 
                 id=f"{seq_id}_file1",
                 description=f"from {Path(file1).name} - DIFFERENT from file2"
             )
             # Use the actual file2 ID if available, otherwise use seq_id
             f2_id = file2_id if file2_id else seq_id
             record2 = SeqRecord(
-                seq=seq2,
+                seq=Seq(seq2),
                 id=f"{f2_id}_file2", 
                 description=f"from {Path(file2).name} - DIFFERENT from file1"
             )
             records_to_write.extend([record1, record2])
             
         elif diff_type == 'same sequence different gene name':
-            # # Write both versions to show gene name differences
-            # record1 = SeqRecord(
-            #     seq=seq1, 
-            #     id=f"{seq_id}_file1",
-            #     description=f"from {Path(file1).name} - SAME sequence but DIFFERENT gene name from file2"
-            # )
-            # # Use the actual file2 ID
-            # record2 = SeqRecord(
-            #     seq=seq2,
-            #     id=f"{file2_id}_file2", 
-            #     description=f"from {Path(file2).name} - SAME sequence but DIFFERENT gene name from file1"
-            # )
-            # records_to_write.extend([record1, record2])
+            # Write both versions to show gene name differences
+            record1 = SeqRecord(
+                seq=Seq(seq1), 
+                id=f"{seq_id}_file1_{file2_id}_file2",
+                description=f"from {Path(file1).name} - SAME sequence but DIFFERENT gene name from file2"
+            )
             
-            # This type is not as important, so not written to file
-            continue
+            records_to_write.extend([record1, record2])
             
         elif diff_type == 'file1_only':
             record = SeqRecord(
-                seq=seq1,
+                seq=Seq(seq1),
                 id=f"{seq_id}_file1_only",
                 description=f"from {Path(file1).name} - NOT in file2"
             )
@@ -299,7 +304,7 @@ def write_differences(differences: list, output_file: Union[str, Path],
             
         elif diff_type == 'file2_only':
             record = SeqRecord(
-                seq=seq2,
+                seq=Seq(seq2),
                 id=f"{seq_id}_file2_only", 
                 description=f"from {Path(file2).name} - NOT in file1"
             )
@@ -310,7 +315,7 @@ def write_differences(differences: list, output_file: Union[str, Path],
         SeqIO.write(records_to_write, handle, "fasta")
     
     print(f"Summary:")
-    print(f"  - Same sequence, different gene name (excluded from output file): {sum(1 for _, _, _, t, _ in differences if t == 'same sequence different gene name')}")
+    print(f"  - Same sequence, different gene name: {sum(1 for _, _, _, t, _ in differences if t == 'same sequence different gene name')}")
     print(f"  - Different sequences: {sum(1 for _, _, _, t, _ in differences if t == 'different')}")
     print(f"  - Only in file1: {sum(1 for _, _, _, t, _ in differences if t == 'file1_only')}")
     print(f"  - Only in file2: {sum(1 for _, _, _, t, _ in differences if t == 'file2_only')}")
@@ -351,8 +356,7 @@ def estimate_memory_usage(filepath: Union[str, Path]) -> Tuple[int, float]:
     
     return total_seqs, estimated_memory_gb
 
-
-def main():
+def parse_inputs(args):
     parser = argparse.ArgumentParser(
         description="Compare two FASTA files and identify sequence differences",
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -375,6 +379,10 @@ Examples:
                        help="Only estimate memory usage and exit")
     
     args = parser.parse_args()
+    return args
+
+def main():
+    args = parse_inputs(sys.argv[1:])
     
     # Check if files exist
     for filepath in [args.file1, args.file2]:
@@ -401,7 +409,8 @@ Examples:
             print(f"Auto-selecting memory-efficient mode (estimated memory: {total_mem:.2f} GB)")
         
         start_time = time.time()
-        compare_sequences_memory_efficient(args.file1, args.file2, args.output, args.chunk_size)
+        # compare_sequences_memory_efficient(args.file1, args.file2, args.output, args.chunk_size)
+        compare_sequences_fast(args.file1, args.file2, args.output)
         end_time = time.time()
     else:
         print("Using fast in-memory comparison")

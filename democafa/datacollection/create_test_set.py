@@ -437,7 +437,7 @@ def create_train_sequences(proteins_with_terms, sequences_gzfile, trembl_sequenc
     logger.info(f"Total sequences in training data: {trembl_seq_count + seq_count} proteins in {len(all_taxid)} taxa")
     
 
-def create_test_set(terms_file, sequences_gzfile, out_fasta, train_out_fasta, train_out_taxonomy, test_out_taxonomy, include_all, num_queries=None, uniprot_api_version=None, in_taxonomy=None):
+def create_test_set(terms_file, sequences_gzfile, train_out_fasta, train_out_taxonomy, include_all, out_fasta=None, test_out_taxonomy=None, num_queries=None, uniprot_api_version=None, in_taxonomy=None):
     # Read GO terms data
     logger.info("Reading GO terms data...")
     all_proteins, complete_proteins = get_proteins_with_all_aspects(terms_file)
@@ -469,11 +469,13 @@ def create_test_set(terms_file, sequences_gzfile, out_fasta, train_out_fasta, tr
         annotated_proteins_to_include = set.intersection(all_proteins, set(fasta_proteins.keys()))
     else:
         annotated_proteins_to_include = set()
-        
+    
+    if out_fasta is None:
+        return
     # Append TrEMBL proteins to fasta file of test_superset_all.fasta and train_sequences.fasta
-    if include_all: # including partial knowledge proteins
+    if include_all:  # including partial knowledge proteins
         write_fasta(fasta_proteins, trembl_sequences, annotated_proteins_to_include, out_fasta, num_queries, test_out_taxonomy, description=False)
-    else: # only include proteins missing aspects (no knowledge and limited knowledge)
+    else:  # only include proteins missing aspects (no knowledge and limited knowledge)
         write_missing_aspects_fasta(fasta_proteins, complete_proteins, trembl_proteins, out_fasta, num_queries)
     # write_species(species, in_taxonomy)
     
@@ -486,7 +488,7 @@ def parse_inputs(args):
                         help='Tab-separated file with UniProtKB accessions and GO terms and GO aspects with header')
     parser.add_argument('--fasta_gz', '-f', required=True,
                         help='Path to gzipped SwissProt FASTA file')
-    parser.add_argument('--out_fasta', '-o', required=True,
+    parser.add_argument('--out_fasta', '-o', required=False,
                         help='Path to test superset FASTA file')
     parser.add_argument('--train_out_fasta', '-tf', required=True,
                         help='Path to training FASTA file with annotated proteins')
@@ -496,7 +498,7 @@ def parse_inputs(args):
                         help='Include all proteins in the test superset')
     parser.add_argument('--num_queries', '-n', default=None,
                         help='Number of queries to include in the test superset')
-    parser.add_argument('--test_out_taxonomy', required=True,
+    parser.add_argument('--test_out_taxonomy', required=False,
                         help='Path to test superset taxonomy mapping file')
     parser.add_argument('--uniprot_api', '-u', required=False,
                         help='UniProt API version to retrieve TrEMBL sequences')
@@ -524,12 +526,12 @@ def main():
     create_test_set(
         terms_file=args.terms,
         sequences_gzfile=args.fasta_gz,
-        out_fasta=args.out_fasta,
         train_out_fasta=args.train_out_fasta,
         train_out_taxonomy=args.train_out_taxonomy,
         include_all=True,
-        num_queries=args.num_queries,
+        out_fasta=args.out_fasta,
         test_out_taxonomy=args.test_out_taxonomy,
+        num_queries=args.num_queries,
         uniprot_api_version=args.uniprot_api,
         in_taxonomy=args.in_taxonomy
     )

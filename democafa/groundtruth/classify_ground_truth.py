@@ -98,12 +98,12 @@ def wrapper_ground_truth(annot_known, annot2, query_file, graph, graph2, out_pre
     # During re-propagation with frozen graph, some obsolete terms (at t1) reappeared, so remove them
     # Creating "terms-of-interest" set (use this for GOslim too)
     toi = set.intersection(set(obonet.read_obo(graph).nodes()), set(obonet.read_obo(graph2).nodes()))
-    remove_terms = {"GO:0003674","GO:0008150","GO:0005575"}
-    logger.info(f"Removing terms: {remove_terms}")
-    toi = toi - remove_terms
+    # Roots are excluded using -no_orphans during cafaevaluator
+    # remove_terms = {"GO:0003674","GO:0008150","GO:0005575"}
+    # logger.info(f"Removing terms: {remove_terms}")
+    # toi = toi - remove_terms
     with open(f'{out_prefix.replace(".tsv","_terms_of_interest.txt")}', 'w') as f:
         f.write("\n".join(toi))
-    # TODO: remove roots and protein-binding out of toi
     # dfk_df2_toi = dfk_df2[dfk_df2['term'].isin(toi)]
     dfk = dfk[(dfk['term'].isin(toi)) & (dfk['EntryID'].isin(query_ids))] 
     df2 = df2[(df2['term'].isin(toi)) & (df2['EntryID'].isin(query_ids))]
