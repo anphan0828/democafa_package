@@ -291,7 +291,12 @@ def write_differences(differences: list, output_file: Union[str, Path],
                 id=f"{seq_id}_file1_{file2_id}_file2",
                 description=f"from {Path(file1).name} - SAME sequence but DIFFERENT gene name from file2"
             )
-            
+            f2_id = file2_id if file2_id else seq_id
+            record2 = SeqRecord(
+                seq=Seq(seq2),
+                id=f"{f2_id}_file2", 
+                description=f"from {Path(file2).name} - SAME sequence but DIFFERENT gene name from file1"
+            )
             records_to_write.extend([record1, record2])
             
         elif diff_type == 'file1_only':

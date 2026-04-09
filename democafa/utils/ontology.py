@@ -410,17 +410,17 @@ def propagate_and_ia_optimized(terms_file, graph, tsv_propagated, matrix_propaga
             
             # Get ALL terms in this aspect of the ontology (not just annotated ones)
             all_aspect_terms = sorted(subontology.nodes)
-            annotated_terms = set(aspect_df['term']) if not aspect_df.empty else set()
-            logger.info(f'  Aspect {aspect}: {len(all_aspect_terms)} total terms, {len(annotated_terms)} annotated')
+            # annotated_terms = set(aspect_df['term']) if not aspect_df.empty else set()
+            # logger.info(f'  Aspect {aspect}: {len(all_aspect_terms)} total terms, {len(annotated_terms)} annotated')
             
-            if not aspect_proteins:
-                # No proteins annotated in this aspect - all terms get IA = 0.0
-                for term in all_aspect_terms:
-                    ia_results.append({'term': term, 'ia': 0.0, 'aspect': aspect})
-                continue
+            # if not aspect_proteins:
+            #     # No proteins annotated in this aspect - all terms get IA = 0.0
+            #     for term in all_aspect_terms:
+            #         ia_results.append({'term': term, 'ia': 0.0, 'aspect': aspect})
+            #     continue
             
             # Build aspect-specific matrix directly
-            annotated_terms_list = sorted(annotated_terms)
+            annotated_terms_list = sorted(all_aspect_terms)
             protein_to_idx = {p: i for i, p in enumerate(aspect_proteins)}
             term_to_idx = {t: i for i, t in enumerate(annotated_terms_list)}
             
@@ -440,12 +440,12 @@ def propagate_and_ia_optimized(terms_file, graph, tsv_propagated, matrix_propaga
             
            # Compute IA for ALL terms in the ontology
             for term in all_aspect_terms:
-                if term in annotated_terms:
+                # if term in annotated_terms:
                     # Term has annotations - compute IA normally
-                    ia_value = calc_ia_direct(term, aspect_matrix_with_dummy, subontology, term_to_idx)
-                else:
-                    # Term has no annotations - IA = 0.0
-                    ia_value = 0.0        
+                ia_value = calc_ia_direct(term, aspect_matrix_with_dummy, subontology, term_to_idx)
+                # else:
+                    # # Term has no annotations - IA = 0.0
+                    # ia_value = 0.0        
                 ia_results.append({'term': term, 'ia': ia_value, 'aspect': aspect})
 
         # Create final DataFrame

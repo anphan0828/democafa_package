@@ -15,5 +15,6 @@ dependencies = [
     "pandas"
 ]
 
-[tool.setuptools]
-packages = ["democafa"]
+[tool.setuptools.packages.find]
+include = ["democafa*"]
+

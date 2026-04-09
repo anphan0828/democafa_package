@@ -25,7 +25,7 @@ import numpy as np
 from Bio.UniProt import GOA
 from Bio import SwissProt as sp
 from democafa.utils.ontology import clean_ontology_edges, filter_terms_given_obo, replace_alternate_GO_terms
-from democafa.config import GO_CODES
+from democafa.utils.constants import GO_CODES
 
 # Create a specific logger for this module (not the root logger)
 logger = logging.getLogger('retrieve_terms')

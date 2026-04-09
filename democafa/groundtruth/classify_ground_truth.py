@@ -111,6 +111,23 @@ def wrapper_ground_truth(annot_known, annot2, query_file, graph, graph2, out_pre
     logger.info(f"Known annotations after filtering: {len(dfk)} annotations")
     logger.info(f"New annotations after filtering: {len(df2)} annotations")
     
+    # (added Mar 2026) Remove binding-only proteins from MFO ground truth
+    import networkx as nx
+    subontologies_F = fetch_aspect(clean_ontology_edges(obonet.read_obo(graph)), root='GO:0003674')
+    binding_terms = set(nx.descendants(subontologies_F,'GO:0005515'))
+    binding_terms.add('GO:0005515')
+    
+    annotated_F_proteins = set(df2[df2['aspect']=='F']['EntryID'])
+    not_binding_only_proteins = set(df2[(df2['EntryID'].isin(annotated_F_proteins)) & 
+                                                  (~df2['term'].isin(binding_terms)) & 
+                                                  (df2['aspect']=='F')]['EntryID']) # these proteins have other MFO annotations
+    binding_df = df2[(df2['EntryID'].isin(annotated_F_proteins - not_binding_only_proteins)) & 
+                               (df2['aspect']=='F')] # these annotations are protein-binding only
+    print(binding_df.head())
+    # Remove rows of binding-only proteins from df2, but proteins with binding + other MFO annotations can stay (because they are not binding-only)
+    df2_old = df2.copy()
+    df2 = df2[~df2.index.isin(binding_df.index)]
+    logger.info(f"Removed {len(df2_old['EntryID'].unique())-len(df2['EntryID'].unique())} binding-only proteins from MFO aspect")
     
     # Compare dfk and df2 to find proteins that gained new terms
     dfk_df2_toi = dfk.merge(df2, on=df2.columns.to_list(), how='outer', indicator=True)
@@ -164,6 +181,7 @@ def wrapper_ground_truth(annot_known, annot2, query_file, graph, graph2, out_pre
     LK_pairs = p_asp_pairs_filtered[~p_asp_pairs_filtered['aspect_known']]
     PK_pairs = p_asp_pairs_filtered[p_asp_pairs_filtered['aspect_known']]
     
+    # Get gained terms by matching gained aspect to df2_gain
     if len(LK_pairs) > 0:
         LK_df = df2_gain.merge(
             LK_pairs[['EntryID', 'aspect']], 
@@ -189,6 +207,7 @@ def wrapper_ground_truth(annot_known, annot2, query_file, graph, graph2, out_pre
         PK_asp_pairs = PK_df[['EntryID', 'aspect']].drop_duplicates().reset_index(drop=True)
         
         # Create PK_known DataFrame using merge instead of loops
+        # Note: some proteins gained a new ancestral term (due to graph2 having new edges to terms in TOI), but leaf term does not change -> should not be gaining?
         dfk_PK = dfk.merge(
             PK_pairs[['EntryID', 'aspect']], 
             on=['EntryID', 'aspect'], 

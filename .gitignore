@@ -3,4 +3,10 @@ data/
 **/*.pyc
 **/*.log
 __pycache__/
-
+democafa/__pycache__/
+democafa.egg-info/
+selected_submissions/*
+tests/*
+*.err
+*.out
+build/
