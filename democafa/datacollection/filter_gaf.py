@@ -1,5 +1,11 @@
 #!/usr/bin/env python3
-"""Filter a GAF file by taxonomy or entries, optinally using multiprocessing."""
+"""Filter Gene Association Format (GAF) annotations by protein or taxon.
+
+The command-line entry point uses :func:`filter_gaf_true_streaming` because it
+can process multi-GB UniProt-GOA files without retaining annotations in memory.
+The older :func:`filter_gaf` implementation is kept for callers that explicitly
+want Biopython GAF parsing or multiprocessing.
+"""
 
 import os
 import sys
@@ -8,9 +14,7 @@ import gzip
 import logging
 from datetime import datetime
 import pandas as pd
-import numpy as np
 from Bio.UniProt import GOA
-from Bio import SwissProt as sp
 from Bio import SeqIO
 
 # Create a specific logger for this module (not the root logger)
@@ -47,10 +51,10 @@ def process_chunk_file(chunk_file, taxon, entries):
                 if rec['Taxon_ID'][0] not in taxon:
                     continue
             chunk_data.append(rec)
-    
+
     logger.debug(f"Chunk {os.path.basename(chunk_file)}: processed {processed_count} records, kept {len(chunk_data)} records")
     return chunk_data
-    
+
 
 def get_entries_from_file(query_file):
     """
@@ -67,37 +71,41 @@ def get_entries_from_file(query_file):
             for record in SeqIO.parse(handle, 'fasta'):
                 entry_id = record.id.split("|")[1] if "|" in record.id else record.id
                 query_ids.add(entry_id)
-    elif query_file.endswith('.txt'):
+    elif query_file.endswith(('.txt', '.tsv')):
         logger.info(f"Reading query IDs from text file: {query_file}")
         with open(query_file, 'r') as handle:
-            query_ids = {line.strip() for line in handle}
+            query_ids = {line.strip().split('\t')[0] for line in handle if line.strip()}
     else:
         logger.error("Please provide a fasta file or a text file with query IDs")
         sys.exit(1)
     logger.info(f"Extracted {len(query_ids)} entries from input query file")
-    
+
     return query_ids
-    
+
 
 def get_taxon_from_file(taxon):
     if taxon is None:
         selected_taxon = None
-    elif taxon.isdigit(): 
+    elif taxon.isdigit():
         # If taxon is a single ID, convert it to a list
         selected_taxon = [f'taxon:{taxon}']
     elif isinstance(taxon, str) and os.path.exists(taxon):
         logger.info(f"Reading taxon IDs from file: {taxon}")
         taxon_file = pd.read_csv(taxon, header=0, sep='\t', encoding='ISO-8859-1')
         selected_taxon = [f'taxon:{taxon_id}' for taxon_id in set(taxon_file.iloc[:,0].tolist())]
+    else:
+        raise ValueError(f"Taxon must be a numeric ID or an existing TSV file: {taxon}")
     logger.info(f"Selected {len(selected_taxon) if selected_taxon else 0} taxa: {selected_taxon[:5] if selected_taxon and len(selected_taxon) > 5 else selected_taxon}")
     return selected_taxon
-    
-        
+
+
 def filter_gaf(annot, output, taxon_path=None, query=None, use_mp=True, num_processes=None, chunk_size=10000000):
     """
     Read and process a GAF file (gzipped or plain text) with multiprocessing.
     Takes 30m for 22Gb uniprot goa for 15 processes.
     """
+    entries = None
+    taxon = None
     if query is not None:
         entries = get_entries_from_file(query)
     if taxon_path is not None:
@@ -107,19 +115,20 @@ def filter_gaf(annot, output, taxon_path=None, query=None, use_mp=True, num_proc
     logger.info(f"Input file: {annot}")
     logger.info(f"Output file: {output}")
     logger.info(f"Using multiprocessing: {use_mp}")
-    
+
     is_gzipped = annot.endswith('.gz')
     open_func = gzip.open if is_gzipped else open
     mode = 'rt' if is_gzipped else 'r'
-    handle = open_func(annot, mode)
     mode_out = 'wt' if output.endswith('.gz') else 'w'
-    
-    if not os.path.exists(os.path.dirname(output)):
-        os.makedirs(os.path.dirname(output))
-        
-    if not use_mp: 
+    open_func_out = gzip.open if output.endswith('.gz') else open
+
+    output_dir = os.path.dirname(output)
+    if output_dir:
+        os.makedirs(output_dir, exist_ok=True)
+
+    if not use_mp:
         logger.info("Processing file without multiprocessing")
-        with open_func(output, mode_out) as out_handle:
+        with open_func(annot, mode) as handle, open_func_out(output, mode_out) as out_handle:
             for rec in GOA.gafiterator(handle):
                 if entries is not None:
                     if rec['DB_Object_ID'] not in entries:
@@ -136,8 +145,8 @@ def filter_gaf(annot, output, taxon_path=None, query=None, use_mp=True, num_proc
             num_processes = min(int(os.environ.get('SLURM_CPUS_PER_TASK', multiprocessing.cpu_count())) - 1, 16)
             num_processes = max(1, num_processes)
         logger.info(f"Using {num_processes} processes for parallel computation")
-        
-        temp_dir = tempfile.mkdtemp(dir=os.path.dirname(annot))
+
+        temp_dir = tempfile.mkdtemp(dir=os.path.dirname(annot) or None)
         logger.debug(f"Created temporary directory: {temp_dir}")
         chunk_files = []
         try:
@@ -145,7 +154,7 @@ def filter_gaf(annot, output, taxon_path=None, query=None, use_mp=True, num_proc
             logger.info(f"Splitting GAF file into chunks of {chunk_size} records...")
             chunk_count = 0
             record_count = 0
-            
+
             with open_func(annot, mode) as handle:
                 current_chunk_lines = []
                 headers = []
@@ -153,18 +162,18 @@ def filter_gaf(annot, output, taxon_path=None, query=None, use_mp=True, num_proc
                 while line.startswith('!'):
                     headers.append(line)
                     line = handle.readline()
-                
+
                 logger.debug(f"Found {len(headers)} header lines")
-                
+
                 # Process first non-header line
                 if line:
                     current_chunk_lines.append(line)
-                
+
                 # Process remaining lines
                 for line in handle:
                     current_chunk_lines.append(line)
                     record_count += 1
-                    
+
                     if len(current_chunk_lines) >= chunk_size:
                         # Write chunk to temporary file
                         chunk_file = os.path.join(temp_dir, f"chunk_{chunk_count}.gaf")
@@ -172,13 +181,13 @@ def filter_gaf(annot, output, taxon_path=None, query=None, use_mp=True, num_proc
                             # Write headers to each chunk
                             f.writelines(headers)
                             f.writelines(current_chunk_lines)
-                        
+
                         chunk_files.append(chunk_file)
                         chunk_count += 1
                         current_chunk_lines = []
                         if chunk_count % 10 == 0:
                             logger.debug(f"Created chunk {chunk_count} with {chunk_size} records")
-                            
+
                 # Write any remaining lines to the final chunk
                 if current_chunk_lines:
                     chunk_file = os.path.join(temp_dir, f"chunk_{chunk_count}.gaf")
@@ -186,28 +195,28 @@ def filter_gaf(annot, output, taxon_path=None, query=None, use_mp=True, num_proc
                         # Write headers to each chunk
                         f.writelines(headers)
                         f.writelines(current_chunk_lines)
-                    
+
                     chunk_files.append(chunk_file)
                     chunk_count += 1
                     logger.info(f"Created final chunk {chunk_count} with {len(current_chunk_lines)} records")
-                    
+
             # Process chunks in parallel
             logger.info(f"Processing {len(chunk_files)} chunks with {num_processes} processes")
             process_func = partial(process_chunk_file, taxon=taxon, entries=entries)
             with multiprocessing.Pool(processes=num_processes) as pool:
                 results = pool.map(process_func, chunk_files)
-            
+
             all_data = [item for sublist in results for item in sublist]
             logger.info(f"Filtered data contains {len(all_data)} records")
 
             logger.info(f"Writing filtered data to output file: {output}")
-            with open_func(output, mode_out) as out_handle:
+            with open_func_out(output, mode_out) as out_handle:
                 out_handle.writelines(headers)  # Write headers to the output file
                 for rec in all_data:
                     GOA.writerec(rec, out_handle)
-                    
+
             logger.info("Successfully completed GAF filtering")
-            
+
         except Exception as e:
             logger.error(f"Error during GAF filtering: {str(e)}")
             raise
@@ -219,186 +228,73 @@ def filter_gaf(annot, output, taxon_path=None, query=None, use_mp=True, num_proc
                     os.remove(chunk_file)
             if os.path.exists(temp_dir):
                 os.rmdir(temp_dir)
-                
-# Move this function to module level (outside of filter_gaf_hybrid)
-def process_line_batch(args):
-    """Process a batch of lines with given filters"""
-    line_batch, entries, taxon = args
-    
-    filtered_lines = []
-    headers = []
-    
-    for line in line_batch:
-        if line.startswith('!'):
-            headers.append(line)
-            continue
-        
-        fields = line.strip().split('\t')
-        if len(fields) < 13:
-            continue
-        
-        # Fast filtering without GAF parsing
-        if entries and fields[1] not in entries:
-            continue
-        
-        if taxon:
-            taxon_field = fields[12].split('|')[0] if '|' in fields[12] else fields[12]
-            if taxon_field not in taxon:
-                continue
-        
-        filtered_lines.append(line)
-    
-    return headers, filtered_lines
 
 
 def filter_gaf_true_streaming(annot, output, query=None, taxon_path=None):
-    """True streaming - no memory buildup"""
+    """Stream a GAF file and preserve records matching optional filters.
+
+    Args:
+        annot: Input GAF path, optionally gzipped.
+        output: Output GAF path, optionally gzipped.
+        query: Optional FASTA, TXT, or TSV of UniProt accessions to keep.
+        taxon_path: Optional numeric taxon ID or TSV whose first column contains
+            taxonomy IDs. GAF taxon fields are compared as ``taxon:<id>``.
+    """
     import gzip
-    
+
     # Load filters once
     entries = frozenset(get_entries_from_file(query)) if query else None
-    
+    taxon = frozenset(get_taxon_from_file(taxon_path)) if taxon_path else None
+
     # Simple streaming without multiprocessing
     is_gzipped = annot.endswith('.gz')
     open_func = gzip.open if is_gzipped else open
     mode = 'rt' if is_gzipped else 'r'
-    
+
     mode_out = 'wt' if output.endswith('.gz') else 'w'
     open_func_out = gzip.open if output.endswith('.gz') else open
-    
+    output_dir = os.path.dirname(output)
+    if output_dir:
+        os.makedirs(output_dir, exist_ok=True)
+
     processed = 0
     kept = 0
-    
+
     with open_func(annot, mode) as f_in, open_func_out(output, mode_out) as f_out:
         for line in f_in:
             processed += 1
-            
+
             if line.startswith('!'):
                 f_out.write(line)
                 continue
-            
-            # Fast field extraction
-            fields = line.split('\t', 2)  # Only split first 2 tabs
-            if len(fields) < 2:
+
+            fields = line.rstrip('\n').split('\t')
+            if len(fields) < 13:
                 continue
-                
+
             db_object_id = fields[1]
-            
+
             if entries and db_object_id not in entries:
                 continue
-                
+
+            if taxon:
+                taxon_field = fields[12].split('|')[0]
+                if taxon_field not in taxon:
+                    continue
+
             f_out.write(line)
             kept += 1
-            
+
             if processed % 10000000 == 0:
                 logger.info(f"Processed {processed:,} lines, kept {kept:,}")
-    
+
     logger.info(f"Completed: {processed:,} processed, {kept:,} kept")
-    
-# def filter_gaf_hybrid(annot, output, taxon_path=None, query=None, num_processes=None):
-#     """Hybrid approach: stream + raw line processing + optimized filters"""
-#     import multiprocessing
-    
-#     def optimize_filters(query, taxon_path):
-#         """Pre-process filters for maximum lookup speed"""
-#         entries = None
-#         if query:
-#             logger.info("Optimizing entry filter...")
-#             entries = get_entries_from_file(query)
-#             # Convert to frozenset for faster lookups
-#             entries = frozenset(entries)
-#             logger.info(f"Entry filter ready: {len(entries)} entries")
-        
-#         taxon = None
-#         if taxon_path:
-#             logger.info("Optimizing taxon filter...")
-#             taxon = get_taxon_from_file(taxon_path)
-#             taxon = frozenset(taxon)
-#             logger.info(f"Taxon filter ready: {len(taxon)} taxa")
-        
-#         return entries, taxon
-
-#     # Optimize filters once
-#     entries, taxon = optimize_filters(query, taxon_path)
-    
-#     if num_processes is None:
-#         num_processes = min(multiprocessing.cpu_count() - 1, 16)
-    
-#     logger.info(f"Using hybrid approach with {num_processes} processes")
-    
-#     # Stream processing
-#     is_gzipped = annot.endswith('.gz')
-#     open_func = gzip.open if is_gzipped else open
-#     mode = 'rt' if is_gzipped else 'r'
-    
-#     batch_size = 100000  # Process in smaller batches
-#     mode_out = 'wt' if output.endswith('.gz') else 'w'
-#     open_func_out = gzip.open if output.endswith('.gz') else open
-    
-#     # Ensure output directory exists
-#     if not os.path.exists(os.path.dirname(output)):
-#         os.makedirs(os.path.dirname(output))
-    
-#     with open_func(annot, mode) as f_in, open_func_out(output, mode_out) as f_out:
-#         headers_written = False
-#         batch = []
-#         total_processed = 0
-#         batch_count = 0
-        
-#         with multiprocessing.Pool(num_processes) as pool:
-#             # Collect batches and process them
-#             batches_to_process = []
-            
-#             for line in f_in:
-#                 batch.append(line)
-                
-#                 if len(batch) >= batch_size:
-#                     # Add batch with filters as arguments
-#                     batches_to_process.append((batch.copy(), entries, taxon))
-#                     batch = []
-#                     batch_count += 1
-                    
-#                     # Process batches in chunks to avoid memory issues
-#                     if len(batches_to_process) >= num_processes * 2:
-#                         # Process current batches
-#                         results = pool.map(process_line_batch, batches_to_process)
-                        
-#                         # Write results
-#                         for headers, filtered_lines in results:
-#                             if not headers_written and headers:
-#                                 f_out.writelines(headers)
-#                                 headers_written = True
-#                             f_out.writelines(filtered_lines)
-                        
-#                         total_processed += sum(len(batch_args[0]) for batch_args in batches_to_process)
-#                         if total_processed % 1000000 == 0:
-#                             logger.info(f"Processed {total_processed} lines, {batch_count} batches")
-                        
-#                         batches_to_process = []
-            
-#             # Process remaining batch
-#             if batch:
-#                 batches_to_process.append((batch, entries, taxon))
-            
-#             # Process any remaining batches
-#             if batches_to_process:
-#                 results = pool.map(process_line_batch, batches_to_process)
-                
-#                 for headers, filtered_lines in results:
-#                     if not headers_written and headers:
-#                         f_out.writelines(headers)
-#                         headers_written = True
-#                     f_out.writelines(filtered_lines)
-                
-#                 total_processed += sum(len(batch_args[0]) for batch_args in batches_to_process)
-
-#     logger.info(f"Hybrid processing completed: {total_processed} lines processed")
 
 
 def parse_inputs(argv):
     parser = argparse.ArgumentParser(
-        description='Filter a GAF file by taxonomy or entries, optinally using multiprocessing. Headers are preserved.')
-    
+        description='Filter a GAF file by taxonomy or entries, optionally using multiprocessing. Headers are preserved.')
+
     parser.add_argument('--annot', '-a', required=True,
                         help='Path to first annotation file (can be gzipped)')
     parser.add_argument('--output', '-o', default='data/processed/goa_uniprot_filtered.gaf.gz',
@@ -407,32 +303,32 @@ def parse_inputs(argv):
                         help='Taxon ID file to filter proteins (default: None)')
     parser.add_argument('--query', '-q', required=False,
                         help='Query file with protein IDs (or FASTA file, can be gzipped) to filter annotations (default: None)')
-    parser.add_argument('--log-level', choices=['DEBUG', 'INFO', 'WARNING', 'ERROR'], 
+    parser.add_argument('--log-level', choices=['DEBUG', 'INFO', 'WARNING', 'ERROR'],
                         default='INFO', help='Set the logging level (default: INFO)')
-    
+
     args = parser.parse_args(argv)
-    
+
     # Configure logging level based on argument
     logger.setLevel(getattr(logging, args.log_level))
     for handler in logger.handlers:
         handler.setLevel(getattr(logging, args.log_level))
-    
+
     return args
 
 
 def main():
     args = parse_inputs(sys.argv[1:])
-    
+
     logger.info(f"Arguments: {vars(args)}")
-    
-    filter_gaf_true_streaming(args.annot, 
-               args.output, 
-               taxon_path=args.taxon, 
-               query=args.query, 
-            #    use_mp=True, 
+
+    filter_gaf_true_streaming(args.annot,
+               args.output,
+               taxon_path=args.taxon,
+               query=args.query,
+            #    use_mp=True,
             #    num_processes=None
             )
-    
+
     # python3 -m democafa.datacollection.filter_gaf -a data/raw/goa_uniprot_all.gaf.226.gz -q data/raw/uniprot_sprot.fasta.gz -o data/processed/cafa6/goa_uniprot_filtered_mp.gaf.226.gz
 if __name__ == "__main__":
     main()

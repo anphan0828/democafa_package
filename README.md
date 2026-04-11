@@ -1,55 +1,32 @@
 # democafa
 
-## Overview
+`democafa` is a Python package for building CAFA-style protein function prediction data releases, baseline inputs, ground-truth splits, and leaderboard scores. The code is organized as terminal-runnable modules under `democafa/`; most steps can be run with `python -m democafa.<subpackage>.<module>`.
 
-This project is a CAFA (Critical Assessment of protein Function Annotation) implementation focusing on protein function prediction. It represents a conversion from a script-based approach to a proper Python package structure, offering improved modularity, reusability, and maintainability.
+## Features
 
-## Key Features
+* Data processing from UniProt FASTA, UniProt-GOA GAF, UniProt DAT, and GO OBO files.
+* Filtering for large GAF files using streaming and optional multiprocessing paths.
+* GO evidence-code filtering, alternate-term normalization, ontology pivot filtering, term propagation, and information accretion calculation.
+* Training/test sequence preparation for CAFA-style evaluation.
+* Ground-truth processing and NK/LK/PK classification.
+* Baseline prediction modules and container-oriented baseline folders.
 
-*   **Modular Design:** Functionality is clearly separated into focused modules that can be run as separate modules or in the wrapper main script.
-*   **Configuration:** File versions and data sources are defined in a config file and can be used across the package.
-*   **Optimization:** Filtering for large files, UniProt streaming download, matrix calculation for Information Accretion, chunk processing are implemented to increase efficiency
-*   **Logging:** Logging is included and can be stored to logs folder for future reference
+## Installation
 
-## Project Structure
-### Directory Breakdown
+Create the main environment and install the package from the repository root:
 
-*   **democafa:** Contains the main source code for the democafa package.
-    *   **\_\_init\_\_.py:** Initializes the democafa package, including version information and top-level imports.
-    *   **config.py:** Provides configuration settings and parameters for the package.
-    *   **config.yaml:** Contains data sources and versions.
-    *   **main.py:** Contains the main entry point for the application.
-    *   **datacollection:** Contains modules for data retrieval and preparation.
-        *   **\_\_init\_\_.py:** Initializes the data module.
-        *   **create\_test\_set.py:** Creates the combined test set.
-        *   **retrieve\_sequences.py:** Collects sequence data.
-        *   **retrieve\_terms.py:** Retrieves GO terms.
-    *   **baselines:** Contains modules implementing prediction algorithms. These baseline methods will be entirely dockerized in the next update.
-        *   **\_\_init\_\_.py:** Initializes the baselines module.
-        *   **blast_chunks.py:** Implements a BLAST-based prediction algorithm, with chunking logic for parallel processing.
-        *   **goa_nonexp.py:** Implements a non-experimental GO annotations baseline prediction.
-        *   **naive.py:** Implements a naive prediction algorithm.
-        *   **prott5_chunks.py:** Implements a ProtT5-embeddings-based prediction algorithm, with chunking logic for parallel processing.
-    *   **groundtruth:** Contains modules processing and classifying ground truth.
-        *   **classify_ground_truth.py:** Compares two annotation files and classify into No Knowledge, Limited Knowledge, and Partial Knowledge proteins.
-        *   **process_ground_truth.py:** Preprocesses hold out annotations to correct format for classifying.
-    *   **utils:** Contains utility modules.
-        *   **\_\_init\_\_.py:** Initializes the utilities module.
-        *   **ontology.py:** Provides shared ontology processing functions.
-        *   **run_blast.sh:** Runs external NCBI BLAST (shell script) from terminal with bioconda::blast.
-        *   **run_prott5.sh:** Runs external ProtT5 embeddings (shell script) from terminal with hugging face model.
-        *   **prott5-baseline:** Folder containing scripts for ProtT5 embeddings retrieval.
-*   **data:** Contains raw and processed data.        
-*   **tests:** Contains test files mirroring the package structure.
-*   **build:** Contains build artifacts.
-
-### Package Structure
-
+```bash
+conda env create -f democafaenv.yaml
+conda activate democafaenv
+pip install .
 ```
+
+For ProtT5-specific baseline work, use the separate environment described in the baseline container notes or create another environment with PyTorch, Transformers, h5py, tqdm, joblib, scikit-learn, scipy, and sentencepiece.
+
+## Package Structure
+
+```text
 democafa_package/
-    data/
-        raw/
-        processed/
     democafa/
         __init__.py
         config.py
@@ -57,62 +34,83 @@ democafa_package/
         main.py
         datacollection/
             __init__.py
-            retrieve_terms.py
-            retrieve_sequences.py
+            compare_fasta.py
             create_test_set.py
+            create_train_set.py
+            download_fasta_by_taxon.py
+            filter_gaf.py
+            propagate_and_ia.py
+            retrieve_sequences.py
+            retrieve_terms.py
+        groundtruth/
+            __init__.py
+            classify_ground_truth.py
+            process_ground_truth.py
         baselines/
-            __init__.py
-            naive.py
-            blast_chunks.py
-            goa_nonexp.py
-            prott5_chunks.py
+            blast_container/
+            goa_nonexp_container/
+            naive_container/
+            prott5_container
         utils/
-            __init__.py
+            compare_tsv.py
+            constants.py
+            ia.py
             ontology.py
-            run_blast.sh
-            run_prott5.sh
-            prott5-baseline/
-    tests/
-    build/
+            performance.py
     democafaenv.yaml
     pyproject.toml
     setup.py
     README.md
 ```
 
-## Usage
+## Data Collection Modules
 
-To use this project, follow these steps:
+Run modules from the repository root:
 
-0.  **Conda environments:** 
-*   Create main CAFA environment using `conda env create -f democafaenv.yaml`, then activate it using `conda activate democafaenv`. 
-*   Create another environment to run prott5:
-```
-conda create --name prott5-env python=3.10 
-conda activate prott5-env
-conda install pytorch torchvision torchaudio -c pytorch
-conda install h5py transformers tqdm joblib scikit-learn scipy sentencepiece -c conda-forge
-```
-1.  **Installation:** Install the package using `pip install .` (from the `democafa_package` directory).
-2.  **Configuration:** Configure the necessary settings in the `config` modules.
-3.  **Data Preparation:** Run the scripts in the `datacollection` module to retrieve and prepare the data.
-4.  **Baseline Prediction:** Use the scripts in the `baselines` module to make baseline predictions.
-5.  **Evaluation:** Evaluate the predictions using the appropriate evaluation scripts.
-
-To rerun any step within the pipeline, run the following command from the root directory (`democafa_package/`)
-
-```
-python3 -m democafa.baselines.goa_nonexp <provide arguments as needed>
+```bash
+python -m democafa.datacollection.filter_gaf --help
+python -m democafa.datacollection.retrieve_terms --help
+python -m democafa.datacollection.create_test_set --help
+python -m democafa.datacollection.propagate_and_ia --help
 ```
 
-## Additional notes
-- Baselines are constructed using GO at submission deadline (t0)
-    - To evaluate baselines: propagate using t0 obo, then intersect with obo (t-1), then propagate obo to ensure connectivity
-    - To evaluate any prediction: propagate using t-1 (the pivot graph)
-    - To make ground truth comparable with the predictions: propagate ground truth using t1 obo, then intersect with t-1 obo, then propagate using t-1 obo
-    - To use GO-slim: propagate predictions using GO slim obo (with roots included), intersect with t-1 obo, then propagate using t-1 obo
-    
-    
-# TODO:
-- Add unit test
-- Proteins will be removed from evaluation set if their sequences changed between release and evaluation
+Main modules:
+
+* `filter_gaf.py`: streams or parses a GAF file and filters records by query accessions and/or taxonomy IDs while preserving GAF headers.
+* `retrieve_terms.py`: extracts `EntryID`, `term`, and `aspect` from GAF or DAT annotations after evidence-code filtering and ontology cleanup.
+* `download_fasta_by_taxon.py`: downloads reviewed UniProtKB FASTA records for taxonomy IDs listed in a TSV file.
+* `create_train_set.py`: writes annotated SwissProt training sequences and an `EntryID<TAB>taxon_id` mapping.
+* `create_test_set.py`: creates training FASTA/taxonomy files and optionally a test-superset FASTA, including TrEMBL accessions downloaded from UniProt when needed.
+* `propagate_and_ia.py`: propagates terms through a supplied OBO graph and writes propagated annotations plus IA values. Uses official IA calculation from [here](https://github.com/claradepaolis/InformationAccretion).
+* `retrieve_sequences.py`: extracts selected sequences from a FASTA file using an accession list.
+* `compare_fasta.py`: compares two FASTA files by UniProt accession and writes sequence differences.
+
+## Ground Truth Modules
+
+Run modules from the repository root:
+
+```bash
+python -m democafa.groundtruth.process_ground_truth --help
+python -m democafa.groundtruth.classify_ground_truth --help
+```
+
+Main modules:
+
+* `process_ground_truth.py`: converts raw holdout annotation TSVs into the package terms schema and applies evidence, ontology, isoform, and binding-only filters.
+* `classify_ground_truth.py`: compares known and later annotations for a query set and writes NK, LK, PK, PK-known, target, and terms-of-interest files.
+
+## Typical Flow
+
+1. Download or select SwissProt FASTA records with `download_fasta_by_taxon.py`.
+2. Filter UniProt-GOA to the selected FASTA/query set with `filter_gaf.py`.
+3. Extract training terms with `retrieve_terms.py`.
+4. Create train/test sequence files with `create_test_set.py` or `create_train_set.py`.
+5. Propagate training terms and compute IA with `propagate_and_ia.py`.
+6. Build later-timepoint or holdout ground truth with `process_ground_truth.py` and `classify_ground_truth.py`.
+
+## Notes
+
+* Baselines are constructed against the submission-time ontology. Containerized baselines are available on [Dockerhub](https://hub.docker.com/repositories/anphan0828).
+* Prediction and ground-truth files should be propagated and filtered against the same pivot ontology before comparison.
+* For ontology pivots, use `retrieve_terms.py --add_graph` to remove terms not present in the frozen graph.
+* Proteins whose sequences changed between release and evaluation should be removed from the evaluation set before final scoring.
