@@ -1,5 +1,10 @@
 #!/usr/bin/env python3
 
+"""IMPORTANT: main.py file is outdated, refer to the instruction in README.md to run each module separately.
+Most functions listed here have not been updated for correct arguments
+"""
+
+
 import os
 from democafa.config import GO_CODES, RAW_FILE_PATHS, PROCESSED_FILE_PATHS, BASELINE_PATHS
 from democafa.datacollection.filter_gaf import filter_gaf
