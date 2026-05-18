@@ -12,9 +12,11 @@ authors = [
 dependencies = [
     "numpy",
     "scipy",
-    "pandas"
+    "pandas",
+    "biopython",
+    "matplotlib",
+    "seaborn"
 ]
 
 [tool.setuptools.packages.find]
 include = ["democafa*"]
-

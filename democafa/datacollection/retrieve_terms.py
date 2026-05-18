@@ -26,6 +26,7 @@ from Bio.UniProt import GOA
 from Bio import SwissProt as sp
 from democafa.utils.ontology import clean_ontology_edges, filter_terms_given_obo, replace_alternate_GO_terms
 from democafa.utils.constants import GO_CODES
+from democafa.datacollection.remove_subcell_annt import remove_subcell_annt_from_annotation_df
 
 # Create a specific logger for this module (not the root logger)
 logger = logging.getLogger('retrieve_terms')
@@ -304,7 +305,7 @@ def process_go_from_dat(file_path, selected_codes):
     return df
 
 
-def wrapper_retrieve_terms(annot_file, selected_go_codes, graph, add_graph=None, output_tsv='train_terms.tsv'):
+def wrapper_retrieve_terms(annot_file, selected_go_codes, graph, add_graph=None, output_tsv='train_terms.tsv', remove_subcell_annt=False):
     """Read annotations, normalize ontology terms, and write a terms TSV."""
     logger.info(f"Annotation file: {annot_file}")
     logger.info(f"Selected GO codes: {selected_go_codes}")
@@ -350,7 +351,14 @@ def wrapper_retrieve_terms(annot_file, selected_go_codes, graph, add_graph=None,
     if obsolete_terms:
         logger.warning(f"{len(obsolete_terms)} obsolete terms found in the annotation file: {list(obsolete_terms)[:10]}. These terms will not appear in terms file.")
         annotation_df = annotation_df[~annotation_df['term'].isin(obsolete_terms)]
-
+        
+    # Added May 2026: remove subcellular localization or RHEA annotations that are experimental (for CAFA6), 
+    # these were pre-existing UniProtKB-SubCell and RHEA annotations with IEA evidence code, that were recently 
+    # added as EXP annotations, they are not really new annotations so remove them from t1 annotations
+    if remove_subcell_annt:
+        annotation_df = remove_subcell_annt_from_annotation_df(annotation_df, annot_file)
+        
+            
     # Remove terms that are not in the frozen graph in 3 steps
     # (propagate using graph2, intersect with graph terms, propagate again with graph)
     if add_graph is not None:
@@ -380,6 +388,8 @@ def parse_inputs(argv):
                         help='Path to OBO ontology graph of a later timepoint. Provide this graph to remove terms that are not in frozen graph.')
     parser.add_argument('--tsv', default='train_terms.tsv',
                         help='Path to save annotations in TSV format')
+    parser.add_argument('--remove_subcell_annt', action='store_true',
+                        help='Whether to remove subcellular localization and RHEA annotations that are experimental (for CAFA6)')
     parser.add_argument('--log-level', choices=['DEBUG', 'INFO', 'WARNING', 'ERROR'],
                         default='INFO', help='Set the logging level (default: INFO)')
 
@@ -411,7 +421,8 @@ def main():
             selected_go_codes=args.selected_go_codes,
             graph=args.graph,
             add_graph=args.add_graph,
-            output_tsv=args.tsv
+            output_tsv=args.tsv,
+            remove_subcell_annt=args.remove_subcell_annt
         )
     except Exception as e:
         logger.error(f"Error in retrieve_terms script: {str(e)}")
